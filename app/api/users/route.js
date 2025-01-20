@@ -6,25 +6,37 @@ import User from '@/app/models/User';
 export async function POST(request) {
   try {
     await connectDB();
+    const { username, password, mobileNo, role, status } = await request.json();
 
-    const { username, email, password, mobileNo, role } = await request.json();
-
-    // Basic validation
-    if (!username || !email || !password || !mobileNo) {
+    // Validate required fields
+    if (!username || !password || !mobileNo || !role) {
       return NextResponse.json(
-        { error: 'All fields are required' },
+        { error: 'All required fields must be filled' },
         { status: 400 }
       );
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
-    });
+    // Validate role enum
+    if (!['salesman', 'purchaseman'].includes(role)) {
+      return NextResponse.json(
+        { error: 'Invalid role selected' },
+        { status: 400 }
+      );
+    }
 
+    // Validate status enum
+    if (status && !['active', 'inactive'].includes(status)) {
+      return NextResponse.json(
+        { error: 'Invalid status selected' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user exists
+    const existingUser = await User.findOne({ username });
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User with this email or username already exists' },
+        { error: 'Username already exists' },
         { status: 400 }
       );
     }
@@ -32,29 +44,35 @@ export async function POST(request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
+    // Create user with validated data
     const user = await User.create({
       username,
-      email,
       password: hashedPassword,
       mobileNo,
-      role
+      role,
+      status: status || 'active',
+      taskStats: {
+        pending: 0,
+        inProgress: 0,
+        completed: 0
+      }
     });
 
-    // Remove password from response
-    const userWithoutPassword = {
+    // Return user without sensitive data
+    const userResponse = {
       _id: user._id,
       username: user.username,
-      email: user.email,
       mobileNo: user.mobileNo,
-      role: user.role
+      role: user.role,
+      status: user.status,
+      taskStats: user.taskStats
     };
 
-    return NextResponse.json(userWithoutPassword, { status: 201 });
+    return NextResponse.json(userResponse, { status: 201 });
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json(
-      { error: 'Error creating user' },
+      { error: error.message || 'Error creating user' },
       { status: 500 }
     );
   }
@@ -65,8 +83,8 @@ export async function GET() {
     await connectDB();
     
     const users = await User.find({})
-      .select('-password') // Exclude password field
-      .sort({ createdAt: -1 }); // Sort by newest first
+      .select('-password -recentActivity')
+      .sort({ createdAt: -1 });
     
     return NextResponse.json(users);
   } catch (error) {

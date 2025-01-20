@@ -6,7 +6,7 @@ import User from '@/app/models/User';
 
 export async function getUsers() {
   await connectDB();
-  const users = await User.find({}).select('-password');
+  const users = await User.find({}).select('-password -recentActivity');
   return JSON.parse(JSON.stringify(users));
 }
 
@@ -24,7 +24,13 @@ export async function deleteUser(userId) {
 export async function updateUser(userId, userData) {
   try {
     await connectDB();
-    const user = await User.findByIdAndUpdate(userId, userData, { new: true }).select('-password');
+    const user = await User.findByIdAndUpdate(
+      userId,
+      userData,
+      { new: true }
+    ).select('-password -recentActivity');
+    
+    await user.updateTaskStats(); // Call the new method to update task stats
     revalidatePath('/admin/users');
     return { success: true, user };
   } catch (error) {

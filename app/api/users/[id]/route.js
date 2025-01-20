@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/app/lib/db';
 import User from '@/app/models/User';
 
-export async function PATCH(request, { params }) {
+export async function PATCH(request) {
   try {
     await connectDB();
-    const { id } = params;
+    const id = request.url.split('/').pop();
     const data = await request.json();
 
     const user = await User.findByIdAndUpdate(
@@ -30,10 +30,10 @@ export async function PATCH(request, { params }) {
   }
 }
 
-export async function GET(request, { params }) {
+export async function GET(request) {
   try {
     await connectDB();
-    const { id } = params;
+    const id = request.url.split('/').pop();
     const user = await User.findById(id).select('-password');
 
     if (!user) {

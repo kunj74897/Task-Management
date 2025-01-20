@@ -10,12 +10,27 @@ export default function CreateTask() {
 
   const handleSubmit = async (taskData) => {
     try {
+      // Format notification settings before sending
+      const formattedData = {
+        ...taskData,
+        notificationFrequency: {
+          type: taskData.notificationType,
+          interval: taskData.notificationInterval,
+          customInterval: {
+            hours: parseInt(taskData.notificationHours) || 24,
+            minutes: parseInt(taskData.notificationMinutes) || 0
+          },
+          startTime: taskData.notificationStartTime,
+          endTime: taskData.notificationEndTime
+        }
+      };
+
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(taskData),
+        body: JSON.stringify(formattedData),
       });
 
       if (!response.ok) {
@@ -36,7 +51,9 @@ export default function CreateTask() {
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Task</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">Create a new task and assign it to users or roles</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Create a new task with notifications and custom fields
+        </p>
       </div>
 
       {error && (

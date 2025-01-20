@@ -3,23 +3,29 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function TaskForm({ onSubmit }) {
+export default function TaskForm({ initialData, onSubmit }) {
   const router = useRouter();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [taskData, setTaskData] = useState({
-    title: '',
-    description: '',
-    assignType: 'user', // 'user' or 'role'
-    assignedTo: '',
-    assignedRole: '',
-    priority: 'medium',
-    notificationFrequency: 'daily',
-    repeatNotification: false,
-    dueDate: '',
-    subTasks: []
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    assignType: initialData?.assignedTo ? 'user' : 'role',
+    assignedTo: initialData?.assignedTo || '',
+    assignedRole: initialData?.assignedRole || '',
+    priority: initialData?.priority || 'medium',
+    status: initialData?.status || 'pending',
+    assignmentStatus: initialData?.assignmentStatus || 'pending',
+    notificationType: initialData?.notificationFrequency?.type || 'once',
+    notificationInterval: initialData?.notificationFrequency?.interval || 'daily',
+    notificationHours: initialData?.notificationFrequency?.customInterval?.hours || 24,
+    notificationMinutes: initialData?.notificationFrequency?.customInterval?.minutes || 0,
+    notificationStartTime: initialData?.notificationFrequency?.startTime || '',
+    notificationEndTime: initialData?.notificationFrequency?.endTime || '',
+    repeatNotification: initialData?.repeatNotification || false,
+    fields: initialData?.fields || [],
   });
 
   useEffect(() => {
@@ -44,29 +50,6 @@ export default function TaskForm({ onSubmit }) {
     }));
   };
 
-  const addSubTask = () => {
-    setTaskData(prev => ({
-      ...prev,
-      subTasks: [...prev.subTasks, { title: '', description: '', status: 'pending' }]
-    }));
-  };
-
-  const handleSubTaskChange = (index, field, value) => {
-    setTaskData(prev => ({
-      ...prev,
-      subTasks: prev.subTasks.map((task, i) => 
-        i === index ? { ...task, [field]: value } : task
-      )
-    }));
-  };
-
-  const removeSubTask = (index) => {
-    setTaskData(prev => ({
-      ...prev,
-      subTasks: prev.subTasks.filter((_, i) => i !== index)
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -84,25 +67,93 @@ export default function TaskForm({ onSubmit }) {
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium mb-2">Title</label>
-          <input
-            type="text"
-            name="title"
-            value={taskData.title}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-            required
-          />
-        </div>
+  const addField = () => {
+    setTaskData(prev => ({
+      ...prev,
+      fields: [...prev.fields, { label: '', type: 'string', value: '', required: false }]
+    }));
+  };
 
-        <div>
-          <label className="block text-sm font-medium mb-2">Assign To</label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-4">
+  const handleFieldChange = (index, field, value) => {
+    setTaskData(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === index ? { ...f, [field]: value } : f
+      )
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Basic Information */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Title
+            </label>
+            <input
+              type="text"
+              name="title"
+              value={taskData.title}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Priority
+            </label>
+            <select
+              name="priority"
+              value={taskData.priority}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Description
+            </label>
+            <textarea
+              name="description"
+              value={taskData.description}
+              onChange={handleChange}
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Assignment Section */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Assignment</h2>
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Assign To
+            </label>
+            <div className="flex items-center space-x-6 mb-4">
               <label className="inline-flex items-center">
                 <input
                   type="radio"
@@ -110,9 +161,9 @@ export default function TaskForm({ onSubmit }) {
                   value="user"
                   checked={taskData.assignType === 'user'}
                   onChange={handleChange}
-                  className="form-radio"
+                  className="form-radio text-blue-600"
                 />
-                <span className="ml-2">User</span>
+                <span className="ml-2 text-gray-700 dark:text-gray-300">User</span>
               </label>
               <label className="inline-flex items-center">
                 <input
@@ -121,9 +172,9 @@ export default function TaskForm({ onSubmit }) {
                   value="role"
                   checked={taskData.assignType === 'role'}
                   onChange={handleChange}
-                  className="form-radio"
+                  className="form-radio text-blue-600"
                 />
-                <span className="ml-2">Role</span>
+                <span className="ml-2 text-gray-700 dark:text-gray-300">Role</span>
               </label>
             </div>
 
@@ -132,7 +183,10 @@ export default function TaskForm({ onSubmit }) {
                 name="assignedTo"
                 value={taskData.assignedTo}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                  text-gray-900 dark:text-white
+                  bg-white dark:bg-gray-700
+                  focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
                 <option value="">Select User</option>
@@ -147,7 +201,10 @@ export default function TaskForm({ onSubmit }) {
                 name="assignedRole"
                 value={taskData.assignedRole}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                  text-gray-900 dark:text-white
+                  bg-white dark:bg-gray-700
+                  focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
                 <option value="">Select Role</option>
@@ -157,87 +214,165 @@ export default function TaskForm({ onSubmit }) {
             )}
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-4">
+      {/* Notification Settings */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Notification Settings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium mb-2">Priority</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Notification Type
+            </label>
             <select
-              name="priority"
-              value={taskData.priority}
+              name="notificationType"
+              value={taskData.notificationType}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
+              <option value="once">Once</option>
+              <option value="recurring">Recurring</option>
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2">Due Date</label>
-            <input
-              type="datetime-local"
-              name="dueDate"
-              value={taskData.dueDate}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-md"
-              required
-            />
-          </div>
-        </div>
+          {taskData.notificationType === 'recurring' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Interval
+                </label>
+                <select
+                  name="notificationInterval"
+                  value={taskData.notificationInterval}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                    text-gray-900 dark:text-white
+                    bg-white dark:bg-gray-700
+                    focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium mb-2">Description</label>
-          <textarea
-            name="description"
-            value={taskData.description}
-            onChange={handleChange}
-            rows={4}
-            className="w-full px-3 py-2 border rounded-md"
-          />
+              {taskData.notificationInterval === 'custom' && (
+                <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Hours
+                    </label>
+                    <input
+                      type="number"
+                      name="notificationHours"
+                      value={taskData.notificationHours}
+                      onChange={handleChange}
+                      min="0"
+                      max="23"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                        text-gray-900 dark:text-white
+                        bg-white dark:bg-gray-700
+                        focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Minutes
+                    </label>
+                    <input
+                      type="number"
+                      name="notificationMinutes"
+                      value={taskData.notificationMinutes}
+                      onChange={handleChange}
+                      min="0"
+                      max="59"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                        text-gray-900 dark:text-white
+                        bg-white dark:bg-gray-700
+                        focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
+      </div>
 
-        <div className="md:col-span-2">
+      {/* Custom Fields */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Custom Fields</h2>
           <button
             type="button"
-            onClick={addSubTask}
-            className="text-blue-600 hover:text-blue-700"
+            onClick={addField}
+            className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 
+              dark:text-blue-400 dark:hover:text-blue-300"
           >
-            + Add Subtask
+            + Add Field
           </button>
         </div>
 
-        {taskData.subTasks.map((subtask, index) => (
-          <div key={index} className="md:col-span-2 border p-4 rounded-md">
+        {taskData.fields.map((field, index) => (
+          <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <input
               type="text"
-              placeholder="Subtask title"
-              value={subtask.title}
-              onChange={(e) => handleSubTaskChange(index, 'title', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md mb-2"
+              placeholder="Field Label"
+              value={field.label}
+              onChange={(e) => handleFieldChange(index, 'label', e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <textarea
-              placeholder="Subtask description"
-              value={subtask.description}
-              onChange={(e) => handleSubTaskChange(index, 'description', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-              rows={2}
-            />
+            <select
+              value={field.type}
+              onChange={(e) => handleFieldChange(index, 'type', e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm 
+                text-gray-900 dark:text-white
+                bg-white dark:bg-gray-700
+                focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="string">Text</option>
+              <option value="number">Number</option>
+              <option value="file">File</option>
+            </select>
+            <div className="flex items-center">
+              <label className="inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={(e) => handleFieldChange(index, 'required', e.target.checked)}
+                  className="form-checkbox text-blue-600"
+                />
+                <span className="ml-2 text-gray-700 dark:text-gray-300">Required</span>
+              </label>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="flex justify-end space-x-4">
+      {/* Submit Button */}
+      <div className="flex justify-end">
         <button
           type="submit"
           disabled={loading}
-          className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+          className={`px-6 py-3 bg-blue-600 text-white rounded-lg font-medium
+            hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
             ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {loading ? 'Creating...' : 'Create Task'}
+          {loading ? 'Saving...' : (initialData ? 'Update Task' : 'Create Task')}
         </button>
       </div>
+
+      {error && (
+        <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
+          <p className="font-medium">Error</p>
+          <p>{error}</p>
+        </div>
+      )}
     </form>
   );
 } 
