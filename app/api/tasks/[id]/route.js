@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/app/lib/db';
 import Task from '@/app/models/Task';
+import { cookies } from 'next/headers';
+import { verify } from 'jsonwebtoken';
 
 // Get Single Task
 export async function GET(request) {
@@ -43,16 +45,28 @@ export async function PATCH(request) {
       );
     }
 
-    // Add to history if status changed
-    if (data.status && data.status !== task.status) {
-      task.history.push({
-        action: `Status changed from ${task.status} to ${data.status}`,
-        performedBy: data.userId
-      });
+    // Handle task acceptance/rejection
+    if (data.assignmentStatus) {
+      if (data.assignmentStatus === 'accepted') {
+        task.assignedTo = data.userId;
+        task.assignmentStatus = 'accepted';
+        task.status = 'in-progress';
+      } else if (data.assignmentStatus === 'rejected') {
+        task.assignmentStatus = 'pending';
+        // If it was directly assigned to this user, clear the assignment
+        if (task.assignedTo?.toString() === data.userId) {
+          task.assignedTo = undefined;
+        }
+      }
     }
 
-    // Update task
-    Object.assign(task, data);
+    // Add to history
+    task.history.push({
+      action: `Task ${data.assignmentStatus} by user`,
+      performedBy: data.userId,
+      timestamp: new Date()
+    });
+
     await task.save();
 
     const updatedTask = await Task.findById(id)
@@ -61,6 +75,7 @@ export async function PATCH(request) {
 
     return NextResponse.json(updatedTask);
   } catch (error) {
+    console.error('Error updating task:', error);
     return NextResponse.json(
       { error: 'Error updating task' },
       { status: 500 }

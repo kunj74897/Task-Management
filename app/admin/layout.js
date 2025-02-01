@@ -1,10 +1,34 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import LogoutButton from '@/app/components/LogoutButton';
 
 export default function AdminLayout({ children }) {
+  const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/check');
+        const data = await response.json();
+        console.log('Auth check in admin layout:', data);
+        
+        if (!data.authenticated || data.role !== 'admin') {
+          console.log('Unauthorized access to admin, redirecting to /');
+          router.replace('/');
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        router.replace('/');
+      }
+    };
+
+    checkAuth();
+  }, [router]);
 
   const menuItems = [
     { href: '/admin', label: 'Dashboard', icon: '📊' },
@@ -16,7 +40,10 @@ export default function AdminLayout({ children }) {
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       <aside className="w-64 bg-white dark:bg-gray-800 shadow-md">
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Admin Panel</h1>
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
+            <LogoutButton />
+          </div>
           <nav className="space-y-2">
             {menuItems.map(({ href, label, icon }) => {
               const isActive = pathname === href;
