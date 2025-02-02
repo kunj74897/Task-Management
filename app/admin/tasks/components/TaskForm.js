@@ -12,20 +12,16 @@ export default function TaskForm({ initialData, onSubmit }) {
   const [taskData, setTaskData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
-    assignType: initialData?.assignedTo ? 'user' : 'role',
-    assignedTo: initialData?.assignedTo || '',
-    assignedRole: initialData?.assignedRole || '',
     priority: initialData?.priority || 'medium',
+    assignType: initialData?.assignedTo ? 'user' : 'role',
+    assignedTo: initialData?.assignedTo?._id || initialData?.assignedTo || '',
+    assignedRole: initialData?.assignedRole || '',
     status: initialData?.status || 'pending',
-    assignmentStatus: initialData?.assignmentStatus || 'pending',
-    notificationType: initialData?.notificationFrequency?.type || 'once',
-    notificationInterval: initialData?.notificationFrequency?.interval || 'daily',
-    notificationHours: initialData?.notificationFrequency?.customInterval?.hours || 24,
-    notificationMinutes: initialData?.notificationFrequency?.customInterval?.minutes || 0,
-    notificationStartTime: initialData?.notificationFrequency?.startTime || '',
-    notificationEndTime: initialData?.notificationFrequency?.endTime || '',
-    repeatNotification: initialData?.repeatNotification || false,
-    fields: initialData?.fields || [],
+    notificationType: initialData?.notificationType || 'once',
+    notificationInterval: initialData?.notificationInterval || 'daily',
+    notificationHours: initialData?.notificationHours || 0,
+    notificationMinutes: initialData?.notificationMinutes || 0,
+    fields: initialData?.fields || []
   });
 
   useEffect(() => {
@@ -46,7 +42,11 @@ export default function TaskForm({ initialData, onSubmit }) {
     const { name, value, type, checked } = e.target;
     setTaskData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
+      ...(name === 'assignType' && {
+        assignedTo: '',
+        assignedRole: ''
+      })
     }));
   };
 
@@ -70,15 +70,18 @@ export default function TaskForm({ initialData, onSubmit }) {
   const addField = () => {
     setTaskData(prev => ({
       ...prev,
-      fields: [...prev.fields, { label: '', type: 'string', value: '', required: false }]
+      fields: [
+        ...prev.fields,
+        { label: '', type: 'string', required: false }
+      ]
     }));
   };
 
-  const handleFieldChange = (index, field, value) => {
+  const handleFieldChange = (index, key, value) => {
     setTaskData(prev => ({
       ...prev,
-      fields: prev.fields.map((f, i) => 
-        i === index ? { ...f, [field]: value } : f
+      fields: prev.fields.map((field, i) => 
+        i === index ? { ...field, [key]: value } : field
       )
     }));
   };

@@ -31,13 +31,20 @@ export async function GET(request) {
 }
 
 // Update Task
-export async function PATCH(request) {
+export async function PATCH(request, { params }) {
   try {
     await connectDB();
-    const id = request.url.split('/').pop();
-    const data = await request.json();
+    const { id } = await params;
+    const updates = await request.json();
     
-    const task = await Task.findById(id);
+    console.log('Updating task:', { id, updates });
+
+    const task = await Task.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true }
+    );
+
     if (!task) {
       return NextResponse.json(
         { error: 'Task not found' },
@@ -45,37 +52,9 @@ export async function PATCH(request) {
       );
     }
 
-    // Handle task acceptance/rejection
-    if (data.assignmentStatus) {
-      if (data.assignmentStatus === 'accepted') {
-        task.assignedTo = data.userId;
-        task.assignmentStatus = 'accepted';
-        task.status = 'in-progress';
-      } else if (data.assignmentStatus === 'rejected') {
-        task.assignmentStatus = 'pending';
-        // If it was directly assigned to this user, clear the assignment
-        if (task.assignedTo?.toString() === data.userId) {
-          task.assignedTo = undefined;
-        }
-      }
-    }
-
-    // Add to history
-    task.history.push({
-      action: `Task ${data.assignmentStatus} by user`,
-      performedBy: data.userId,
-      timestamp: new Date()
-    });
-
-    await task.save();
-
-    const updatedTask = await Task.findById(id)
-      .populate('assignedTo', 'username')
-      .populate('history.performedBy', 'username');
-
-    return NextResponse.json(updatedTask);
+    return NextResponse.json(task);
   } catch (error) {
-    console.error('Error updating task:', error);
+    console.error('Task update error:', error);
     return NextResponse.json(
       { error: 'Error updating task' },
       { status: 500 }

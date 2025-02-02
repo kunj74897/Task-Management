@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function CreateUser() {
@@ -15,10 +15,21 @@ export default function CreateUser() {
     status: "active"
   });
 
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const response = await fetch("/api/users", {
@@ -39,6 +50,7 @@ export default function CreateUser() {
       router.refresh();
     } catch (error) {
       setError(error.message);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
@@ -54,19 +66,18 @@ export default function CreateUser() {
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
+      
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New User</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
           Add a new user to the system with role-based access
         </p>
       </div>
-
-      {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-          <p className="font-bold">Error</p>
-          <p>{error}</p>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">

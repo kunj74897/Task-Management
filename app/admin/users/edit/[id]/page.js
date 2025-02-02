@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function EditUser({ params }) {
@@ -14,10 +14,12 @@ export default function EditUser({ params }) {
     status: 'active'
   });
 
+  const userId = use(params).id;
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await fetch(`/api/users/${params.id}`);
+        const response = await fetch(`/api/users/${userId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch user');
         }
@@ -36,13 +38,13 @@ export default function EditUser({ params }) {
     };
 
     fetchUser();
-  }, [params.id]);
+  }, [userId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await fetch(`/api/users/${params.id}`, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

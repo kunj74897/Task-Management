@@ -27,10 +27,10 @@ const taskSchema = new mongoose.Schema({
     type:String,
     required: true
   },
-  assignedTo: {
+  assignedTo: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  },
+  }],
   assignedRole: {
     type: String,
     enum: ['salesman', 'purchaseman']
