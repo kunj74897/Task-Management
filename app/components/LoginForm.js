@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import LoadingScreen from './LoadingScreen';
 
 export default function LoginForm() {
-  const router = useRouter();
   const [loginType, setLoginType] = useState('user');
   const [formData, setFormData] = useState({
     username: '',
@@ -14,33 +13,12 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
-  // Check token on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/auth/check');
-        const data = await response.json();
-        
-        if (data.authenticated) {
-          const path = data.role === 'admin' ? '/admin' : '/users';
-          router.push(path);
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      console.log('Login attempt with:', { ...formData, loginType });
-      
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
@@ -53,19 +31,13 @@ export default function LoginForm() {
       });
 
       const data = await response.json();
-      console.log('Login response:', data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
       }
 
       setRedirecting(true);
-
-      // Force a hard navigation after successful login
       const path = data.user.role === 'admin' ? '/admin' : '/users';
-      console.log('Redirecting to:', path);
-      
-      // Use window.location for a full page reload
       window.location.href = path;
 
     } catch (error) {
@@ -75,6 +47,10 @@ export default function LoginForm() {
       setRedirecting(false);
     }
   };
+
+  if (redirecting || loading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center py-12 px-4 sm:px-6 lg:px-8">

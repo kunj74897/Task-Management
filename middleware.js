@@ -2,28 +2,29 @@ import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
 export async function middleware(request) {
-  console.log('Middleware - Requested URL:', request.nextUrl.pathname);
-  
-  // Allow access to auth-related routes without token
+  // Skip middleware for static files and API routes
   if (
-    request.nextUrl.pathname === '/' ||
+    request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/api/')
   ) {
     return NextResponse.next();
   }
 
   const token = request.cookies.get('token');
-  console.log('Middleware - Token exists:', !!token);
 
   try {
     if (token) {
       const secret = new TextEncoder().encode(process.env.JWT_SECRET);
       const { payload } = await jwtVerify(token.value, secret);
-      console.log('Middleware - Decoded token:', payload);
       
-      // Check role-based access
+      // Handle root path redirect
+      if (request.nextUrl.pathname === '/') {
+        const redirectUrl = payload.role === 'admin' ? '/admin' : '/users';
+        return NextResponse.redirect(new URL(redirectUrl, request.url));
+      }
+
+      // Check role-based access for other paths
       if (request.nextUrl.pathname.startsWith('/admin') && payload.role !== 'admin') {
-        console.log('Middleware - Unauthorized admin access, redirecting to /users');
         return NextResponse.redirect(new URL('/users', request.url));
       }
 
@@ -33,17 +34,25 @@ export async function middleware(request) {
 
       return NextResponse.next();
     }
+
+    // Allow access to root path without token
+    if (request.nextUrl.pathname === '/') {
+      return NextResponse.next();
+    }
+
     return NextResponse.redirect(new URL('/', request.url));
   } catch (error) {
     console.error('Middleware - Token verification failed:', error);
+    
+    // Allow access to root path if token verification fails
+    if (request.nextUrl.pathname === '/') {
+      return NextResponse.next();
+    }
+    
     return NextResponse.redirect(new URL('/', request.url));
   }
 }
 
 export const config = {
-  matcher: [
-    '/',
-    '/admin/:path*',
-    '/users/:path*',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
 };
