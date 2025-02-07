@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
     }
 
     // Get user's role
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean();
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -25,34 +25,48 @@ export async function GET(request, { params }) {
       );
     }
 
-    console.log('Fetching tasks for user:', {
-      userId: user._id,
-      role: user.role
-    });
-
-    // Find tasks that match either condition
+    // Find tasks that are either:
+    // 1. Assigned to user's role and not yet accepted by anyone
+    // 2. Directly assigned to user and pending acceptance
     const tasks = await Task.find({
       $or: [
-        // Tasks directly assigned to the user
-        {
-          assignedTo: userId,
-          assignmentStatus: 'pending'
-        },
-        // Tasks assigned to the user's role
         {
           assignedRole: user.role,
+          status: 'pending',
           assignmentStatus: 'pending',
           $or: [
             { assignedTo: { $exists: false } },
-            { assignedTo: null }
+            { assignedTo: null },
+            { assignedTo: [] }
           ]
+        },
+        {
+          assignedTo: userId,
+          status: 'pending',
+          assignmentStatus: 'pending'
         }
       ]
-    }).sort({ createdAt: -1 });
+    })
+    .select('_id title description priority status assignmentStatus assignedRole createdAt fields')
+    .lean()
+    .exec();
 
-    console.log('Found tasks:', tasks);
+    // Serialize the tasks and their fields
+    const serializedTasks = tasks.map(task => ({
+      ...task,
+      _id: task._id.toString(),
+      createdAt: task.createdAt?.toISOString(),
+      assignedTo: Array.isArray(task.assignedTo) 
+        ? task.assignedTo.map(id => id.toString())
+        : task.assignedTo?.toString(),
+      fields: task.fields?.map(field => ({
+        ...field,
+        _id: field._id?.toString()
+      })) || []
+    }));
 
-    return NextResponse.json(tasks);
+    return NextResponse.json(serializedTasks);
+
   } catch (error) {
     console.error('Error fetching pending tasks:', error);
     return NextResponse.json(

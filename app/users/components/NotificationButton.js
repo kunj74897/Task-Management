@@ -6,10 +6,15 @@ import NotificationDrawer from '@/app/users/components/NotificationDrawer';
 export default function NotificationButton({ userId }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  console.log('NotificationButton render', { isDrawerOpen });
+
   return (
     <>
       <button
-        onClick={() => setIsDrawerOpen(true)}
+        onClick={() => {
+          console.log('Opening drawer');
+          setIsDrawerOpen(true);
+        }}
         className="relative p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -24,7 +29,10 @@ export default function NotificationButton({ userId }) {
 
       <NotificationDrawer
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={() => {
+          console.log('Closing drawer');
+          setIsDrawerOpen(false);
+        }}
         userId={userId}
       />
     </>

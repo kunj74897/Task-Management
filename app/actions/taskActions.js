@@ -43,41 +43,66 @@ export async function deleteTask(taskId) {
 }
 
 export async function acceptTask(taskId, userId) {
+  const debug = (msg, data = {}) => {
+    console.log(`[acceptTask] ${msg}`, { timestamp: new Date().toISOString(), ...data });
+  };
+
   try {
+    debug('Starting task acceptance', { taskId, userId });
     await connectDB();
     
-    // Start a session for atomic operations
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // Update the task
+      const existingTask = await Task.findById(taskId).lean();
+      if (!existingTask) {
+        throw new Error('Task not found');
+      }
+      
+      if (existingTask.assignmentStatus !== 'pending') {
+        throw new Error('Task is no longer available');
+      }
+
       const task = await Task.findByIdAndUpdate(
         taskId,
         {
-          assignedTo: userId,
-          assignmentStatus: 'accepted',
-          status: 'in-progress'
+          $set: {
+            assignedTo: [userId],
+            assignmentStatus: 'accepted',
+            status: 'in-progress'
+          }
         },
-        { new: true, session }
+        { new: true, session, lean: true }
       );
 
-      // Update the user's assignedTasks array
       await User.findByIdAndUpdate(
         userId,
         { $addToSet: { assignedTasks: taskId } },
         { session }
       );
 
-      // Commit the transaction
       await session.commitTransaction();
-      revalidatePath('/users');
-      return { success: true, task };
+      
+      // Serialize the task and its fields before returning
+      const serializedTask = {
+        ...task,
+        _id: task._id.toString(),
+        assignedTo: task.assignedTo.map(id => id.toString()),
+        createdAt: task.createdAt?.toISOString(),
+        updatedAt: task.updatedAt?.toISOString(),
+        fields: task.fields?.map(field => ({
+          ...field,
+          _id: field._id?.toString()
+        })) || []
+      };
+
+      return { success: true, task: serializedTask };
     } catch (error) {
       await session.abortTransaction();
-      throw error;
+      return { success: false, error: error.message };
     } finally {
-      session.endSession();
+      await session.endSession();
     }
   } catch (error) {
     return { success: false, error: error.message };
