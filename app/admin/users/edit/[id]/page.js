@@ -7,28 +7,39 @@ export default function EditUser({ params }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [tasks, setTasks] = useState([]);
   const [formData, setFormData] = useState({
     username: '',
     mobileNo: '',
     role: '',
-    status: 'active'
+    status: 'active',
+    password: '',
+    assignedTasks: []
   });
 
   const userId = use(params).id;
 
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch(`/api/users/${userId}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch user');
-        }
-        const data = await response.json();
+        // Fetch user data
+        const userResponse = await fetch(`/api/users/${userId}`);
+        if (!userResponse.ok) throw new Error('Failed to fetch user');
+        const userData = await userResponse.json();
+
+        // Fetch all tasks
+        const tasksResponse = await fetch('/api/tasks');
+        if (!tasksResponse.ok) throw new Error('Failed to fetch tasks');
+        const tasksData = await tasksResponse.json();
+
+        setTasks(tasksData);
         setFormData({
-          username: data.username,
-          mobileNo: data.mobileNo,
-          role: data.role,
-          status: data.status
+          username: userData.username,
+          mobileNo: userData.mobileNo,
+          role: userData.role,
+          status: userData.status,
+          password: '',
+          assignedTasks: userData.assignedTasks || []
         });
       } catch (error) {
         setError(error.message);
@@ -37,7 +48,7 @@ export default function EditUser({ params }) {
       }
     };
 
-    fetchUser();
+    fetchData();
   }, [userId]);
 
   const handleSubmit = async (e) => {
@@ -72,6 +83,20 @@ export default function EditUser({ params }) {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleTaskToggle = (taskId) => {
+    setFormData(prev => {
+      const currentTasks = prev.assignedTasks || [];
+      const newTasks = currentTasks.includes(taskId)
+        ? currentTasks.filter(id => id !== taskId)
+        : [...currentTasks, taskId];
+
+      return {
+        ...prev,
+        assignedTasks: newTasks
+      };
+    });
   };
 
   if (loading) {
@@ -131,6 +156,19 @@ export default function EditUser({ params }) {
                 required
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                New Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+            </div>
           </div>
         </div>
 
@@ -170,6 +208,43 @@ export default function EditUser({ params }) {
           </div>
         </div>
 
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 mt-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Assigned Tasks</h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {tasks.map(task => (
+              <div 
+                key={task._id}
+                className="flex items-center justify-between p-4 border dark:border-gray-700 rounded-lg"
+              >
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900 dark:text-white">{task.title}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{task.description}</p>
+                  <div className="flex gap-2 mt-1">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      task.priority === 'high' ? 'bg-red-100 text-red-800' :
+                      task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {task.priority}
+                    </span>
+                    <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                      {task.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <input
+                    type="checkbox"
+                    checked={formData.assignedTasks?.includes(task._id)}
+                    onChange={() => handleTaskToggle(task._id)}
+                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex justify-end space-x-4 mt-8">
           <button
             type="button"
@@ -190,4 +265,4 @@ export default function EditUser({ params }) {
       </form>
     </div>
   );
-} 
+}

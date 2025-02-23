@@ -26,92 +26,87 @@ export default function UserTaskList() {
     }
   };
 
-  const handleStatusChange = async (taskId, newStatus) => {
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update status');
-      fetchTasks();
-    } catch (error) {
-      setError('Error updating task status');
-    }
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(/\//g, '-');
   };
 
-  const getStatusBadgeStyle = (status) => {
+  const getPriorityBadgeStyle = (priority) => {
     const styles = {
-      'pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'in-progress': 'bg-blue-100 text-blue-800 border-blue-200',
-      'completed': 'bg-green-100 text-green-800 border-green-200'
+      'low': 'bg-gray-100 text-gray-800',
+      'medium': 'bg-blue-100 text-blue-800',
+      'high': 'bg-orange-100 text-orange-800',
+      'urgent': 'bg-red-100 text-red-800'
     };
-    return styles[status] || styles.pending;
+    return styles[priority] || styles.medium;
   };
 
   if (loading) return <div className="text-center py-4">Loading tasks...</div>;
   if (error) return <div className="text-red-500 text-center py-4">{error}</div>;
 
   return (
-    <>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {tasks.map((task) => (
-          <div 
-            key={task._id} 
-            className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-200 cursor-pointer"
-            onClick={() => setSelectedTask(task)}
-          >
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {task.title}
-                </h3>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                  {task.priority}
-                </span>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {tasks.map((task) => (
+        <div 
+          key={task._id}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden"
+        >
+          <div className="p-4">
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {task.title}
+              </h3>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityBadgeStyle(task.priority)}`}>
+                {task.priority}
+              </span>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Status:</span>
+                <span className="text-gray-900 dark:text-gray-100">{task.status}</span>
               </div>
-              
-              <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm line-clamp-2">
-                {task.description}
-              </p>
-              
-              <div className="space-y-4">
-                <div className={`px-4 py-2 rounded-lg text-sm font-medium ${getStatusBadgeStyle(task.status)} w-full text-center`}>
-                  {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-                </div>
-                
-                <select
-                  value={task.status}
-                  onChange={(e) => handleStatusChange(task._id, e.target.value)}
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="pending">Set as Pending</option>
-                  <option value="in-progress">Set as In Progress</option>
-                  <option value="completed">Set as Completed</option>
-                </select>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Created:</span>
+                <span className="text-gray-900 dark:text-gray-100">{formatDate(task.createdAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Role:</span>
+                <span className="text-gray-900 dark:text-gray-100">{task.assignedRole}</span>
               </div>
             </div>
+
+            <div className="mt-4 pt-4 border-t dark:border-gray-700">
+              <Link
+                href={`/users/tasks/execute/${task._id}`}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-block text-center"
+              >
+                Execute Task
+              </Link>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
+
+      {tasks.length === 0 && (
+        <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
+          No tasks assigned
+        </div>
+      )}
 
       {selectedTask && (
-        <TaskExecution 
-          task={selectedTask} 
-          onClose={() => setSelectedTask(null)} 
+        <TaskExecution
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onComplete={fetchTasks}
         />
       )}
-    </>
+    </div>
   );
-}
-
-function getPriorityColor(priority) {
-  const colors = {
-    low: 'bg-green-100 text-green-800',
-    medium: 'bg-blue-100 text-blue-800',
-    high: 'bg-yellow-100 text-yellow-800',
-    urgent: 'bg-red-100 text-red-800'
-  };
-  return colors[priority] || colors.medium;
 } 

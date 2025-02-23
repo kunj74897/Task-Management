@@ -9,7 +9,7 @@ export async function POST(request, { params }) {
   try {
     await connectDB();
     const user = await getCurrentUser();
-    const userID = await params
+    const userid = await params
     
     if (!user) {
       return NextResponse.json(
@@ -20,10 +20,14 @@ export async function POST(request, { params }) {
 
     const formData = await request.formData();
     const files = formData.getAll('files');
+    const fileFields = formData.getAll('fileFields');
     
     // Handle file uploads
-    const uploadedFiles = [];
-    for (const file of files) {
+    const uploadedFiles = {};
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fieldName = fileFields[i];
+      
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       
@@ -32,7 +36,15 @@ export async function POST(request, { params }) {
       const path = join(process.cwd(), 'public', 'uploads', filename);
       
       await writeFile(path, buffer);
-      uploadedFiles.push(`/uploads/${filename}`);
+      uploadedFiles[fieldName] = `/uploads/${filename}`;
+    }
+
+    // Get other form data
+    const customFields = {};
+    for (const [key, value] of formData.entries()) {
+      if (key !== 'files' && key !== 'fileFields') {
+        customFields[key] = value;
+      }
     }
 
     // Update task with submission
@@ -40,10 +52,10 @@ export async function POST(request, { params }) {
       userId: user.id,
       timestamp: new Date(),
       files: uploadedFiles,
-      customFields: Object.fromEntries(formData.entries())
+      customFields
     };
 
-    await Task.findByIdAndUpdate(userID.id, {
+    await Task.findByIdAndUpdate(userid.id, {
       $push: { submissions: submission }
     });
 

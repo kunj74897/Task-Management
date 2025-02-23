@@ -5,7 +5,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Username is required'],
     unique: true,
-    trim: true
+    trim: true,
+    minlength: [3, 'Username must be at least 3 characters long'],
+    maxlength: [30, 'Username cannot exceed 30 characters'],
+    validate: {
+      validator: function (v) {
+        return /^[a-zA-Z0-9_]+$/.test(v); // Allows alphanumeric and underscores
+      },
+      message: 'Username can only contain letters, numbers, and underscores',
+    },
   },
   password: {
     type: String,
@@ -36,11 +44,6 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Task'
   }],
-  taskStats: {
-    pending: { type: Number, default: 0 },
-    inProgress: { type: Number, default: 0 },
-    completed: { type: Number, default: 0 }
-  },
   recentActivity: [{
     action: {
       type: String,

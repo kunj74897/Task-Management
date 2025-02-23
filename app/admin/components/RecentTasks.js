@@ -13,51 +13,88 @@ export default function RecentTasks() {
 
   const fetchRecentTasks = async () => {
     try {
-      const response = await fetch('/api/tasks?limit=5');
+      const response = await fetch('/api/tasks?limit=3&sort=-createdAt');
       const data = await response.json();
       setTasks(data);
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('Error fetching recent tasks:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">Recent Tasks</h2>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <div className="space-y-4">
-          {tasks.map((task) => (
-            <div key={task._id} className="border-b dark:border-gray-700 pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-medium">{task.title}</h3>
-                  <p className="text-sm text-gray-500">{task.assignedTo?.username || task.assignedRole}</p>
-                </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getPriorityColor(task.priority)}`}>
-                  {task.priority}
-                </span>
-              </div>
-            </div>
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).replace(/\//g, '-');
+  };
+
+  const getStatusBadgeStyle = (status) => {
+    const styles = {
+      'pending': 'bg-yellow-100 text-yellow-800',
+      'in-progress': 'bg-blue-100 text-blue-800',
+      'completed': 'bg-green-100 text-green-800'
+    };
+    return styles[status] || styles.pending;
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Recent Tasks</h2>
+        <div className="animate-pulse space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
           ))}
         </div>
-      )}
-      <Link href="/admin/tasks" className="text-blue-500 hover:text-blue-600 text-sm mt-4 inline-block">
-        View all tasks →
-      </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Recent Tasks</h2>
+        <Link 
+          href="/admin/tasks"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          View all
+        </Link>
+      </div>
+      <div className="space-y-4">
+        {tasks.map((task) => (
+          <div 
+            key={task._id}
+            className="border dark:border-gray-700 rounded-lg p-4"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <Link 
+                  href={`/admin/tasks/edit/${task._id}`}
+                  className="text-lg font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {task.title}
+                </Link>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {formatDate(task.createdAt)}
+                </div>
+              </div>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeStyle(task.status)}`}>
+                {task.status}
+              </span>
+            </div>
+          </div>
+        ))}
+        {tasks.length === 0 && (
+          <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+            No tasks found
+          </div>
+        )}
+      </div>
     </div>
   );
-}
-
-function getPriorityColor(priority) {
-  const colors = {
-    low: 'bg-gray-100 text-gray-800',
-    medium: 'bg-blue-100 text-blue-800',
-    high: 'bg-yellow-100 text-yellow-800',
-    urgent: 'bg-red-100 text-red-800'
-  };
-  return colors[priority] || colors.medium;
 } 

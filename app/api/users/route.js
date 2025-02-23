@@ -78,17 +78,34 @@ export async function POST(request) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     await connectDB();
-    
-    const users = await User.find({})
-      .select('-password -recentActivity')
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+    const role = searchParams.get('role');
+
+    let query = {};
+
+    // Add search conditions if search parameter exists
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { mobileNo: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Add role filter if role parameter exists and is not 'all'
+    if (role && role !== 'all') {
+      query.role = role;
+    }
+
+    const users = await User.find(query)
+      .select('-password')
       .sort({ createdAt: -1 });
-    
+
     return NextResponse.json(users);
   } catch (error) {
-    console.error('Error fetching users:', error);
     return NextResponse.json(
       { error: 'Error fetching users' },
       { status: 500 }

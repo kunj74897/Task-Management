@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function TaskExecution({ task, onClose }) {
   const [formData, setFormData] = useState({});
@@ -145,6 +146,15 @@ export default function TaskExecution({ task, onClose }) {
               </button>
             </div>
           </form>
+
+          <div className="mt-4">
+            <Link
+              href={`/users/tasks/execute/${task._id}`}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+            >
+              Execute Task
+            </Link>
+          </div>
         </div>
       </div>
     </div>

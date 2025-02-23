@@ -39,11 +39,47 @@ export async function PATCH(request, { params }) {
     
     console.log('Updating task:', { id, updates });
 
+    // Validate custom fields if present
+    if (updates.customFields) {
+      for (const field of updates.customFields) {
+        if (field.required && !field.value) {
+          return NextResponse.json(
+            { error: `${field.label} is required` },
+            { status: 400 }
+          );
+        }
+        if (field.type === 'number' && field.value && isNaN(field.value)) {
+          return NextResponse.json(
+            { error: `${field.label} must be a valid number` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Map custom fields to the correct format
+    if (updates.customFields) {
+      updates.fields = updates.customFields.map(field => ({
+        label: field.label,
+        type: field.type,
+        value: field.value,
+        required: field.required
+      }));
+      delete updates.customFields;
+    }
+
+    // Handle assignment type changes
+    if (updates.assignType === 'role') {
+      updates.assignedTo = undefined;
+    } else if (updates.assignType === 'user') {
+      updates.assignedRole = undefined;
+    }
+
     const task = await Task.findByIdAndUpdate(
       id,
       { $set: updates },
       { new: true }
-    );
+    ).populate('assignedTo', 'username');
 
     if (!task) {
       return NextResponse.json(
@@ -54,9 +90,9 @@ export async function PATCH(request, { params }) {
 
     return NextResponse.json(task);
   } catch (error) {
-    console.error('Task update error:', error);
+    console.error('Error updating task:', error);
     return NextResponse.json(
-      { error: 'Error updating task' },
+      { error: 'Failed to update task' },
       { status: 500 }
     );
   }

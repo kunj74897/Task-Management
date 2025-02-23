@@ -1,9 +1,56 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getUsers } from '@/app/actions/userActions';
 import DeleteUserButton from './components/DeleteUserButton';
 
-export default async function Users() {
-  const users = await getUsers();
+export default function Users() {
+  const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    filterUsers();
+  }, [searchTerm, roleFilter, users]);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/users');
+      const data = await response.json();
+      setUsers(data);
+      setFilteredUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filterUsers = () => {
+    let filtered = [...users];
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(user =>
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.mobileNo.includes(searchTerm)
+      );
+    }
+
+    // Apply role filter
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(user => user.role === roleFilter);
+    }
+
+    setFilteredUsers(filtered);
+  };
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
@@ -20,9 +67,39 @@ export default async function Users() {
         </Link>
       </div>
 
-      {users.length === 0 ? (
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by username or mobile number..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div className="w-48">
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
+                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                     focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="all">All Roles</option>
+            <option value="salesman">Salesman</option>
+            <option value="purchaseman">Purchaseman</option>
+          </select>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">Loading...</div>
+      ) : filteredUsers.length === 0 ? (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          No users found. Click &quot;Add User&quot; to create one.
+          No users found matching your criteria.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -36,7 +113,7 @@ export default async function Users() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
