@@ -290,6 +290,18 @@ export default function TaskForm({ initialData, onSubmit }) {
     };
   }, [hasUnsavedChanges, taskData, initialData]);
 
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?');
+      if (confirmed) {
+        cleanupUnsavedFiles();
+        router.push('/admin/tasks');
+      }
+    } else {
+      router.push('/admin/tasks');
+    }
+  };
+
   const phoneInputStyles = `
     .PhoneInput {
       display: flex;
@@ -665,8 +677,17 @@ export default function TaskForm({ initialData, onSubmit }) {
         ))}
       </div>
 
-      {/* Submit Button */}
-      <div className="flex justify-end">
+      {/* Submit Buttons */}
+      <div className="flex justify-end gap-4">
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium
+            hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2
+            dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+        >
+          Cancel
+        </button>
         <button
           type="submit"
           disabled={loading}

@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import TaskExecution from './TaskExecution';
 
 export default function UserTaskList() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
     fetchTasks();
@@ -100,13 +98,7 @@ export default function UserTaskList() {
         </div>
       )}
 
-      {selectedTask && (
-        <TaskExecution
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onComplete={fetchTasks}
-        />
-      )}
+      
     </div>
   );
 } 
