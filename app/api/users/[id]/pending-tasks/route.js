@@ -28,23 +28,20 @@ export async function GET(request, { params }) {
     // Find tasks where:
     // 1. Assignment status is pending AND
     // 2. Either:
-    //    a. Task has assignedTo array but doesn't include current user AND role matches
-    //    b. Task has no assigned users AND role matches
+    //    a. Task is assigned directly to the user OR
+    //    b. Task is assigned to user's role and has no specific user assignments
     const tasks = await Task.find({
       assignmentStatus: 'pending',
-      assignedRole: user.role,
       $or: [
+        { assignedTo: userId }, // Tasks directly assigned to user
         {
-          assignedTo: { $exists: true, $ne: [] },
-          assignedTo: { $ne: userId }
-        },
-        {
+          assignedRole: user.role,
           $or: [
             { assignedTo: { $exists: false } },
-            { assignedTo: null },
-            { assignedTo: [] }
+            { assignedTo: [] },
+            { assignedTo: null }
           ]
-        }
+        } // Tasks assigned to user's role with no specific assignments
       ]
     })
     .select('_id title description priority status assignmentStatus assignedRole createdAt fields')
