@@ -16,8 +16,11 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Get user's role
-    const user = await User.findById(userId).lean();
+    // Get user with populated assignedTasks
+    const user = await User.findById(userId)
+      .select('role assignedTasks')
+      .lean();
+
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -27,13 +30,15 @@ export async function GET(request, { params }) {
 
     // Find tasks where:
     // 1. Assignment status is pending AND
-    // 2. Either:
+    // 2. Task is NOT in user's assignedTasks AND
+    // 3. Either:
     //    a. Task is assigned directly to the user OR
     //    b. Task is assigned to user's role and has no specific user assignments
     const tasks = await Task.find({
       assignmentStatus: 'pending',
+      _id: { $nin: user.assignedTasks }, // Exclude tasks that are already assigned
       $or: [
-        { assignedTo: userId }, // Tasks directly assigned to user
+        { assignedTo: userId },
         {
           assignedRole: user.role,
           $or: [
@@ -41,12 +46,11 @@ export async function GET(request, { params }) {
             { assignedTo: [] },
             { assignedTo: null }
           ]
-        } // Tasks assigned to user's role with no specific assignments
+        }
       ]
     })
     .select('_id title description priority status assignmentStatus assignedRole createdAt fields')
-    .lean()
-    .exec();
+    .lean();
 
     // Serialize the tasks and their fields
     const serializedTasks = tasks.map(task => ({

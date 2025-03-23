@@ -5,14 +5,22 @@ import { cookies } from 'next/headers';
 import { verify } from 'jsonwebtoken';
 
 // Get Single Task
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
     await connectDB();
-    const id = request.url.split('/').pop();
+    const { id } = await params;
     
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Task ID is required' },
+        { status: 400 }
+      );
+    }
+
     const task = await Task.findById(id)
       .populate('assignedTo', 'username')
-      .populate('history.performedBy', 'username');
+      .populate('history.performedBy', 'username')
+      .lean();
     
     if (!task) {
       return NextResponse.json(
@@ -21,8 +29,25 @@ export async function GET(request) {
       );
     }
     
-    return NextResponse.json(task);
+    // Convert MongoDB objects to plain objects and handle dates
+    const serializedTask = {
+      ...task,
+      _id: task._id.toString(),
+      createdAt: task.createdAt?.toISOString(),
+      updatedAt: task.updatedAt?.toISOString(),
+      assignedTo: task.assignedTo?.map(user => ({
+        ...user,
+        _id: user._id.toString()
+      })),
+      fields: task.fields?.map(field => ({
+        ...field,
+        _id: field._id?.toString()
+      }))
+    };
+
+    return NextResponse.json(serializedTask);
   } catch (error) {
+    console.error('Error fetching task:', error);
     return NextResponse.json(
       { error: 'Error fetching task' },
       { status: 500 }
@@ -68,12 +93,17 @@ export async function PATCH(request, { params }) {
       delete updates.customFields;
     }
 
-    // Handle assignment type changes
+    // Clear previous assignments based on assignment type
     if (updates.assignType === 'role') {
-      updates.assignedTo = undefined;
+      updates.assignedTo = [];  // Clear user assignments
+      updates.assignedRole = updates.assignedRole;  // Set new role
     } else if (updates.assignType === 'user') {
-      updates.assignedRole = undefined;
+      updates.assignedRole = '';  // Clear role assignment
+      updates.assignedTo = updates.assignedTo ? [updates.assignedTo] : [];  // Set new user
     }
+
+    // Remove assignType as it's not part of the model
+    delete updates.assignType;
 
     const task = await Task.findByIdAndUpdate(
       id,

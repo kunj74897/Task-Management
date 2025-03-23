@@ -1,22 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import NotificationDrawer from '@/app/users/components/NotificationDrawer';
 
 export default function NotificationButton({ userId }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [hasNewTasks, setHasNewTasks] = useState(false);
 
-  console.log('NotificationButton render', { isDrawerOpen });
+  // Listen for notification status updates
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data.type === 'NOTIFICATION_STATUS') {
+        setHasNewTasks(event.data.hasNewTasks);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   return (
     <>
       <button
-        onClick={() => {
-          console.log('Opening drawer');
-          setIsDrawerOpen(true);
-        }}
+        onClick={() => setIsDrawerOpen(true)}
         className="relative p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
       >
+        {hasNewTasks && (
+          <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full"></span>
+        )}
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
@@ -29,10 +40,7 @@ export default function NotificationButton({ userId }) {
 
       <NotificationDrawer
         isOpen={isDrawerOpen}
-        onClose={() => {
-          console.log('Closing drawer');
-          setIsDrawerOpen(false);
-        }}
+        onClose={() => setIsDrawerOpen(false)}
         userId={userId}
       />
     </>

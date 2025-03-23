@@ -17,7 +17,8 @@ export default function EditTask({ params }) {
       try {
         const response = await fetch(`/api/tasks/${taskId}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch task');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch task');
         }
         const data = await response.json();
         
@@ -27,7 +28,7 @@ export default function EditTask({ params }) {
             label: field.label,
             type: field.type,
             value: field.type === 'date' ? 
-              new Date(field.value).toISOString().slice(0, 16) : 
+              formatDateValue(field.value) : 
               field.value,
             required: field.required
           })) || [],
@@ -42,13 +43,32 @@ export default function EditTask({ params }) {
         
         setTask(formattedTask);
       } catch (error) {
-        setError('Error fetching task');
+        console.error('Error details:', error);
+        setError(error.message || 'Error fetching task');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTask();
+    // Helper function to safely format date values
+    const formatDateValue = (value) => {
+      if (!value) return '';
+      try {
+        const date = new Date(value);
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          return '';
+        }
+        return date.toISOString().slice(0, 16);
+      } catch (error) {
+        console.warn('Invalid date value:', value);
+        return '';
+      }
+    };
+
+    if (taskId) {
+      fetchTask();
+    }
   }, [taskId]);
 
   const handleSubmit = async (taskData) => {

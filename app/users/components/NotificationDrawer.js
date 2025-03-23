@@ -7,18 +7,17 @@ export default function NotificationDrawer({ isOpen, onClose, userId }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hasNewTasks, setHasNewTasks] = useState(false);
   const router = useRouter();
 
   console.log('NotificationDrawer render', { isOpen, userId });
 
   const fetchPendingTasks = useCallback(async () => {
-    console.log('fetchPendingTasks called', { isOpen, userId });
-    if (!isOpen || !userId) return;
+    if (!userId) return;
     
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching tasks for user:', userId);
       const response = await fetch(`/api/users/${userId}/pending-tasks`);
       
       if (!response.ok) {
@@ -26,89 +25,85 @@ export default function NotificationDrawer({ isOpen, onClose, userId }) {
       }
       
       const data = await response.json();
-      console.log('Fetched tasks:', data);
       
       if (Array.isArray(data)) {
+        // Set hasNewTasks to true if there are any pending tasks
+        setHasNewTasks(data.length > 0);
         setTasks(data);
       } else {
-        console.warn('Received non-array data:', data);
         setTasks([]);
+        setHasNewTasks(false);
       }
     } catch (error) {
-      console.error('Fetch error details:', error);
+      console.error('Fetch error:', error);
       setError('Failed to load notifications');
     } finally {
       setLoading(false);
     }
-  }, [isOpen, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    console.log('useEffect triggered', { isOpen, userId });
-    if (isOpen && userId) {
-      fetchPendingTasks();
-    }
-    
+    fetchPendingTasks();
+    const pollInterval = setInterval(fetchPendingTasks, 5 * 60 * 1000);
+
     return () => {
-      console.log('Cleanup effect running');
-      setTasks([]);
-      setError(null);
+      clearInterval(pollInterval);
     };
-  }, [isOpen, userId, fetchPendingTasks]);
+  }, [fetchPendingTasks]);
 
   const handleTaskAction = async (taskId, action) => {
-    const debug = (msg, data = {}) => {
-      console.log(`[handleTaskAction] ${msg}`, { timestamp: new Date().toISOString(), ...data });
-    };
-
-    debug('Action started', { taskId, action });
     if (action !== 'accepted') return;
 
     try {
       setError(null);
-      debug('Calling acceptTask');
       const result = await acceptTask(taskId, userId);
-      debug('acceptTask response', result);
       
       if (result.success) {
-        debug('Task accepted successfully');
         setTasks(prevTasks => {
-          const filteredTasks = prevTasks.filter(task => task._id !== taskId);
-          debug('Tasks updated', { 
-            previousCount: prevTasks.length,
-            newCount: filteredTasks.length 
-          });
-          return filteredTasks;
+          const updatedTasks = prevTasks.filter(task => task._id !== taskId);
+          // Update hasNewTasks based on remaining tasks
+          setHasNewTasks(updatedTasks.length > 0);
+          return updatedTasks;
         });
-        
-        // Delay the drawer close slightly to ensure state updates complete
-        setTimeout(() => {
-          debug('Closing drawer');
-          onClose();
-        }, 100);
       } else {
-        debug('Task acceptance failed', { error: result.error });
         throw new Error(result.error || 'Failed to accept task');
       }
     } catch (error) {
-      debug('Error caught', { error: error.message });
       setError(error.message || 'Failed to update task');
     }
   };
+
+  const handleClose = () => {
+    setHasNewTasks(false);
+    onClose();
+    // Force a hard refresh of the page
+    window.location.reload();
+  };
+
+  // Notify parent about new tasks
+  useEffect(() => {
+    if (window.parent) {
+      window.parent.postMessage({ type: 'NOTIFICATION_STATUS', hasNewTasks }, '*');
+    }
+  }, [hasNewTasks]);
 
   if (!isOpen) return null;
 
   console.log('Rendering drawer content', { tasksCount: tasks.length });
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-200 ease-in-out z-50">
+    <div className={`fixed inset-y-0 right-0 w-96 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
       <div className="p-4 border-b dark:border-gray-700">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">Task Notifications</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
-            ✕
+            <span className="sr-only">Close</span>
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       </div>

@@ -27,8 +27,8 @@ export default function EditUser({ params }) {
         if (!userResponse.ok) throw new Error('Failed to fetch user');
         const userData = await userResponse.json();
 
-        // Fetch all tasks
-        const tasksResponse = await fetch('/api/tasks');
+        // Fetch tasks assigned to this user
+        const tasksResponse = await fetch(`/api/users/${userId}/assigned-tasks`);
         if (!tasksResponse.ok) throw new Error('Failed to fetch tasks');
         const tasksData = await tasksResponse.json();
 
