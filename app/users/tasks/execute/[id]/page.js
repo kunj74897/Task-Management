@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
-import PhoneInput from 'react-phone-number-input';
-import 'react-phone-number-input/style.css';
 import TaskExecutionForm from '../../components/TaskExecutionForm';
 
 export default function ExecuteTaskPage({ params }) {
@@ -33,25 +31,44 @@ export default function ExecuteTaskPage({ params }) {
     fetchTask();
   }, [taskId]);
 
-  const handleSubmit = async (taskData) => {
+  const handleSubmit = async (submissionData) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}/execute`, {
-        method: 'POST',
+      // First, create a PATCH request to update the task fields
+      // This ensures the file URLs are saved properly
+      const jsonResponse = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          customFields: taskData.customFields
-        }),
+          fields: submissionData.fields,
+          status: 'completed'
+        })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to submit task');
+      if (!jsonResponse.ok) {
+        const errorData = await jsonResponse.json();
+        throw new Error(errorData.error || 'Failed to save task data');
       }
 
-      router.push('/users/tasks');
+      // After fields are saved, we can then mark it as completed
+      const formData = new FormData();
+      formData.append('status', 'completed');
+      
+      const completeResponse = await fetch(`/api/tasks/${taskId}/execute`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json();
+        throw new Error(errorData.error || 'Failed to complete task');
+      }
+
+      router.push('/users');
       return true;
     } catch (error) {
+      console.error("Error in task submission:", error);
       setError(error.message);
       return false;
     }
@@ -100,13 +117,6 @@ export default function ExecuteTaskPage({ params }) {
           Complete the required information below
         </p>
       </div>
-
-      {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-          <p className="font-bold">Error</p>
-          <p>{error}</p>
-        </div>
-      )}
 
       <TaskExecutionForm initialData={initialData} onSubmit={handleSubmit} />
     </div>

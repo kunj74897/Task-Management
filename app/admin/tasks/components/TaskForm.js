@@ -117,113 +117,190 @@ export default function TaskForm({ initialData, onSubmit }) {
     }));
   };
 
-  // Modify handleFileUpload to store temporary files without deleting previous ones
-  const handleFileUpload = async (index, file) => {
+  const handleFileSelection = (index, file) => {
     if (!file) return;
 
-    setLoading(true);
-    try {
-      const previousFileUrl = taskData.customFields[index].fileUrl;
-
-      // Find the matching field in initialData by label to handle multiple file fields
-      const isOriginalFile = Boolean(
-        initialData?.customFields?.find(
-          (field, i) => 
-            field.type === 'file' && 
-            field.label === taskData.customFields[index].label && 
-            field.value === previousFileUrl
-        )
-      );
-
-      // Only delete the previous file if it is not the original
-      if (previousFileUrl && !isOriginalFile) {
-        const deleteResponse = await fetch('/api/upload', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileUrl: previousFileUrl })
-        });
-
-        if (!deleteResponse.ok) throw new Error('Failed to delete previous file');
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error('File upload failed');
-
-      const data = await response.json();
-
-      // Update form state with new file
-      setTaskData(prev => {
-        const updatedFields = [...prev.customFields];
-        updatedFields[index] = {
-          ...updatedFields[index],
-          value: data.fileUrl,
-          fileUrl: data.fileUrl,
-          fileName: data.fileName
-        };
-        return { ...prev, customFields: updatedFields };
-      });
-
-      setHasUnsavedChanges(true);
-    } catch (error) {
-      setError('Error uploading file: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
+    // Create a temporary local URL for preview
+    const localUrl = URL.createObjectURL(file);
+    
+    // Store the original file URL before replacing it (for later deletion)
+    // This is the URL stored in the database
+    const originalFileUrl = taskData.customFields[index].value;
+    
+    // Store the file and its metadata in the form state
+    setTaskData(prev => {
+      const updatedFields = [...prev.customFields];
+      updatedFields[index] = {
+        ...updatedFields[index],
+        tempFile: file,
+        fileUrl: localUrl,
+        fileName: file.name,
+        originalFileUrl: originalFileUrl, // Store the original URL for deletion on submit
+        value: null
+      };
+      return { ...prev, customFields: updatedFields };
+    });
+    
+    // Track that we have unsaved changes
+    setHasUnsavedChanges(true);
+    
+    // Store the file in our temporary files state
+    setTempFiles(prev => ({
+      ...prev,
+      [index]: file
+    }));
   };
 
   const handleFileDelete = async (index) => {
-    const fileUrl = taskData.customFields[index].fileUrl;
-    if (!fileUrl) return;
-
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUrl })
-      });
-
-      if (!response.ok) throw new Error('Failed to delete file');
-
-      setTaskData(prev => {
-        const updatedFields = [...prev.customFields];
-        updatedFields[index] = {
-          ...updatedFields[index],
-          value: '',
-          fileUrl: null,
-          fileName: null
-        };
-        return { ...prev, customFields: updatedFields };
-      });
-    } catch (error) {
-      setError('Error deleting file: ' + error.message);
+    // Revoke the object URL to prevent memory leaks
+    if (taskData.customFields[index].fileUrl && !taskData.customFields[index].fileUrl.startsWith('/uploads/')) {
+      URL.revokeObjectURL(taskData.customFields[index].fileUrl);
     }
+
+    setTaskData(prev => {
+      const updatedFields = [...prev.customFields];
+      updatedFields[index] = {
+        ...updatedFields[index],
+        tempFile: null,
+        fileUrl: null,
+        fileName: null,
+        value: ''
+      };
+      return { ...prev, customFields: updatedFields };
+    });
+    
+    // Remove from temp files
+    setTempFiles(prev => {
+      const updated = { ...prev };
+      delete updated[index];
+      return updated;
+    });
   };
 
   const handlePreview = (url) => {
-    const previewUrl = url.startsWith('/uploads/') ? url : `/uploads/${url}`;
-    setPreviewUrl(previewUrl);
+    // If it's a local URL (blob:), we can preview it directly
+    if (url.startsWith('blob:')) {
+      // Get file extension from the filename in state
+      const field = taskData.customFields.find(f => f.fileUrl === url);
+      const fileName = field?.fileName || '';
+      const fileExt = fileName.split('.').pop().toLowerCase();
+      
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+      const pdfExt = 'pdf';
+      
+      setPreviewUrl({
+        url: url,
+        type: imageExts.includes(fileExt) ? 'image' : 
+              fileExt === pdfExt ? 'pdf' : 'other'
+      });
+    } else {
+      // For server URLs, use the existing logic
+      const previewUrl = url.startsWith('/uploads/') ? url : `/uploads/${url.split('/').pop()}`;
+      
+      const fileExt = url.split('.').pop().toLowerCase();
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+      const pdfExt = 'pdf';
+      
+      setPreviewUrl({
+        url: previewUrl,
+        type: imageExts.includes(fileExt) ? 'image' : 
+              fileExt === pdfExt ? 'pdf' : 'other'
+      });
+    }
   };
 
   const closePreview = () => {
     setPreviewUrl(null);
   };
 
-  // Modify handleSubmit to handle file cleanup after successful submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const success = await onSubmit(taskData);
+      // First, upload any temporary files
+      const updatedTaskData = { ...taskData };
+      
+      // Process each file field
+      for (let index = 0; index < updatedTaskData.customFields.length; index++) {
+        const field = updatedTaskData.customFields[index];
+        
+        // If this is a file field with a temporary file
+        if (field.type === 'file' && tempFiles[index]) {
+          // If there was a previously submitted file, delete it
+          if (field.originalFileUrl) {
+            try {
+              console.log('Deleting previous file:', field.originalFileUrl);
+              const deleteResponse = await fetch('/api/upload', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileUrl: field.originalFileUrl })
+              });
+              
+              if (!deleteResponse.ok) {
+                console.warn('Failed to delete previous file:', field.originalFileUrl);
+              }
+            } catch (error) {
+              console.error('Error deleting previous file:', error);
+            }
+          }
+          
+          // Upload the new file
+          const fileFormData = new FormData();
+          fileFormData.append('file', tempFiles[index]);
+          
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: fileFormData
+          });
+          
+          if (!response.ok) throw new Error('File upload failed');
+          
+          const data = await response.json();
+          
+          // Update the field with the permanent URL
+          updatedTaskData.customFields[index] = {
+            ...field,
+            value: data.fileUrl,  // Store the URL in the value field for database storage
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            originalFileUrl: null // Clear the original URL reference
+          };
+          
+          // Revoke the temporary URL to prevent memory leaks
+          if (field.fileUrl && field.fileUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(field.fileUrl);
+          }
+        }
+      }
+      
+      // Create a JSON object for submission instead of FormData
+      const submissionData = {
+        title: updatedTaskData.title,
+        description: updatedTaskData.description,
+        priority: updatedTaskData.priority,
+        assignType: updatedTaskData.assignType,
+        assignedTo: updatedTaskData.assignedTo,
+        assignedRole: updatedTaskData.assignedRole,
+        status: updatedTaskData.status,
+        notificationType: updatedTaskData.notificationType,
+        notificationInterval: updatedTaskData.notificationInterval,
+        notificationHours: updatedTaskData.notificationHours,
+        notificationMinutes: updatedTaskData.notificationMinutes,
+        customFields: updatedTaskData.customFields.map(field => ({
+          label: field.label,
+          type: field.type,
+          value: field.value || '',
+          required: field.required
+        }))
+      };
+
+      const success = await onSubmit(submissionData);
       if (success) {
+        // Clear temporary files state
+        setTempFiles({});
+        setHasUnsavedChanges(false);
         router.push('/admin/tasks');
       }
     } catch (error) {
@@ -602,7 +679,7 @@ export default function TaskForm({ initialData, onSubmit }) {
                     <input
                       type="file"
                       ref={el => fileInputRefs.current[index] = el}
-                      onChange={(e) => handleFileUpload(index, e.target.files[0])}
+                      onChange={(e) => handleFileSelection(index, e.target.files[0])}
                       className="hidden"
                     />
                     <div className="flex gap-2 items-center">
@@ -721,11 +798,33 @@ export default function TaskForm({ initialData, onSubmit }) {
               </button>
             </div>
             <div className="relative w-full h-[70vh]">
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0 rounded-lg"
-                title="File Preview"
-              />
+              {previewUrl.type === 'image' ? (
+                <img 
+                  src={previewUrl.url} 
+                  alt="File Preview" 
+                  className="w-full h-full object-contain"
+                />
+              ) : previewUrl.type === 'pdf' ? (
+                <iframe
+                  src={previewUrl.url}
+                  className="w-full h-full border-0 rounded-lg"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">
+                    Preview not available for this file type
+                  </p>
+                  <a 
+                    href={previewUrl.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Download File
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>

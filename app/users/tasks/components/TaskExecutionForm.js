@@ -7,14 +7,13 @@ import 'react-phone-number-input/style.css';
 
 export default function TaskForm({ initialData, onSubmit }) {
   const router = useRouter();
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [taskData, setTaskData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
-   customFields: initialData?.customFields?.map(field => ({
+    customFields: initialData?.customFields?.map(field => ({
       ...field,
       fileUrl: field.type === 'file' ? field.value : null,
       fileName: field.type === 'file' && field.value ? field.value.split('/').pop() : null
@@ -29,8 +28,7 @@ export default function TaskForm({ initialData, onSubmit }) {
   // Add new state for tracking unsaved changes and temporary files
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [tempFiles, setTempFiles] = useState({});
-
-  
+  const [filesToDelete, setFilesToDelete] = useState([]);
 
   const handleCustomFieldChange = (index, field, value) => {
     setTaskData(prev => {
@@ -46,6 +44,7 @@ export default function TaskForm({ initialData, onSubmit }) {
       }
       return { ...prev, customFields: updatedFields };
     });
+    setHasUnsavedChanges(true);
   };  
 
   const handlePhoneNumberChange = (value, index) => {
@@ -57,6 +56,7 @@ export default function TaskForm({ initialData, onSubmit }) {
       };
       return { ...prev, customFields: updatedFields };
     });
+    setHasUnsavedChanges(true);
   };
 
   const handleCustomFieldDateChange = (index, value) => {
@@ -68,194 +68,240 @@ export default function TaskForm({ initialData, onSubmit }) {
       };
       return { ...prev, customFields: updatedFields };
     });
+    setHasUnsavedChanges(true);
   };
 
-  
-
-  // Modify handleFileUpload to store temporary files without deleting previous ones
-  const handleFileUpload = async (index, file) => {
+  // Handle file selection (creates temporary URL)
+  const handleFileSelection = (index, file) => {
     if (!file) return;
 
-    setLoading(true);
-    try {
-      const previousFileUrl = taskData.customFields[index].fileUrl;
-
-      // Find the matching field in initialData by label to handle multiple file fields
-      const isOriginalFile = Boolean(
-        initialData?.customFields?.find(
-          (field, i) => 
-            field.type === 'file' && 
-            field.label === taskData.customFields[index].label && 
-            field.value === previousFileUrl
-        )
-      );
-
-      // Only delete the previous file if it is not the original
-      if (previousFileUrl && !isOriginalFile) {
-        const deleteResponse = await fetch('/api/upload', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileUrl: previousFileUrl })
-        });
-
-        if (!deleteResponse.ok) throw new Error('Failed to delete previous file');
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error('File upload failed');
-
-      const data = await response.json();
-
-      // Update form state with new file
-      setTaskData(prev => {
-        const updatedFields = [...prev.customFields];
-        updatedFields[index] = {
-          ...updatedFields[index],
-          value: data.fileUrl,
-          fileUrl: data.fileUrl,
-          fileName: data.fileName
-        };
-        return { ...prev, customFields: updatedFields };
-      });
-
-      setHasUnsavedChanges(true);
-    } catch (error) {
-      setError('Error uploading file: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
+    // Create a temporary local URL for preview
+    const localUrl = URL.createObjectURL(file);
+    
+    // Store the original file URL if there is one (for later cleanup)
+    const originalFileUrl = taskData.customFields[index].fileUrl;
+    
+    setTaskData(prev => {
+      const updatedFields = [...prev.customFields];
+      updatedFields[index] = {
+        ...updatedFields[index],
+        tempFile: file,
+        fileUrl: localUrl,
+        fileName: file.name,
+        originalFileUrl: originalFileUrl,
+        value: null
+      };
+      return { ...prev, customFields: updatedFields };
+    });
+    
+    // Track that we have unsaved changes
+    setHasUnsavedChanges(true);
+    
+    // Store the file in our temporary files state
+    setTempFiles(prev => ({
+      ...prev,
+      [index]: file
+    }));
   };
 
-  const handleFileDelete = async (index) => {
-    const fileUrl = taskData.customFields[index].fileUrl;
-    if (!fileUrl) return;
-
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUrl })
-      });
-
-      if (!response.ok) throw new Error('Failed to delete file');
-
-      setTaskData(prev => {
-        const updatedFields = [...prev.customFields];
-        updatedFields[index] = {
-          ...updatedFields[index],
-          value: '',
-          fileUrl: null,
-          fileName: null
-        };
-        return { ...prev, customFields: updatedFields };
-      });
-    } catch (error) {
-      setError('Error deleting file: ' + error.message);
+  const handleFileDelete = (index) => {
+    const field = taskData.customFields[index];
+    
+    // If URL is from createObjectURL, revoke it to prevent memory leaks
+    if (field.fileUrl && !field.fileUrl.startsWith('/uploads/')) {
+      URL.revokeObjectURL(field.fileUrl);
     }
+    
+    // If this is an existing file from the server, add to delete list
+    if (field.fileUrl && field.fileUrl.startsWith('/uploads/')) {
+      setFilesToDelete(prev => [...prev, field.fileUrl]);
+    }
+
+    setTaskData(prev => {
+      const updatedFields = [...prev.customFields];
+      updatedFields[index] = {
+        ...updatedFields[index],
+        tempFile: null,
+        fileUrl: null,
+        fileName: null,
+        value: ''
+      };
+      return { ...prev, customFields: updatedFields };
+    });
+    
+    // Remove from temp files
+    setTempFiles(prev => {
+      const updated = { ...prev };
+      delete updated[index];
+      return updated;
+    });
+    
+    setHasUnsavedChanges(true);
   };
 
   const handlePreview = (url) => {
-    const previewUrl = url.startsWith('/uploads/') ? url : `/uploads/${url}`;
-    setPreviewUrl(previewUrl);
+    if (!url) return;
+    
+    // Determine file type for preview handling
+    let previewType = 'other';
+    const fileExt = typeof url === 'string' 
+      ? url.split('.').pop().toLowerCase()
+      : '';
+      
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+    const pdfExt = 'pdf';
+    
+    if (imageExts.includes(fileExt)) {
+      previewType = 'image';
+    } else if (fileExt === pdfExt) {
+      previewType = 'pdf';
+    }
+    
+    // Set the preview URL with its type for proper rendering
+    setPreviewUrl({
+      url: url,
+      type: previewType
+    });
   };
 
   const closePreview = () => {
     setPreviewUrl(null);
   };
 
-  // Modify handleSubmit to handle file cleanup after successful submission
+  const handleCancel = () => {
+    // Clean up any temporary object URLs to prevent memory leaks
+    taskData.customFields.forEach(field => {
+      if (field.fileUrl && !field.fileUrl.startsWith('/uploads/')) {
+        URL.revokeObjectURL(field.fileUrl);
+      }
+    });
+    
+    // Navigate back
+    router.back();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
+    
     try {
-      const success = await onSubmit(taskData);
+      // Upload any temporary files first
+      const updatedTaskData = { ...taskData };
+      
+      // Process each field that has a temporary file
+      for (const [index, field] of updatedTaskData.customFields.entries()) {
+        if (field.tempFile) {
+          const formData = new FormData();
+          formData.append('file', field.tempFile);
+          
+          const uploadResponse = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (!uploadResponse.ok) {
+            throw new Error(`Failed to upload file: ${field.fileName}`);
+          }
+          
+          const data = await uploadResponse.json();
+          
+          // Update the field with the permanent URL
+          updatedTaskData.customFields[index] = {
+            ...field,
+            value: data.fileUrl,  // Store the URL in the value field for database storage
+            fileUrl: data.fileUrl,
+            fileName: data.fileName,
+            tempFile: null, // Clear the temp file
+            originalFileUrl: null // Clear the original URL reference
+          };
+          
+          // Revoke the temporary URL to prevent memory leaks
+          if (field.fileUrl && field.fileUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(field.fileUrl);
+          }
+        } else if (field.type === 'file' && field.fileUrl && field.fileUrl.startsWith('/uploads/')) {
+          // For existing files that weren't changed, ensure value matches fileUrl
+          updatedTaskData.customFields[index] = {
+            ...field,
+            value: field.fileUrl
+          };
+        }
+      }
+      
+      // Delete any files marked for deletion
+      for (const fileUrl of filesToDelete) {
+        if (fileUrl && fileUrl.startsWith('/uploads/')) {
+          try {
+            await fetch('/api/upload', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                fileUrl: fileUrl
+              }),
+            });
+          } catch (error) {
+            console.error('Failed to delete file:', error);
+          }
+        }
+      }
+      
+      // Create a JSON object for submission
+      const submissionData = {
+        status: 'completed',
+        fields: updatedTaskData.customFields.map(field => ({
+          label: field.label,
+          type: field.type,
+          value: field.value || '',
+          required: field.required
+        }))
+      };
+
+      const success = await onSubmit(submissionData);
+      
       if (success) {
-        router.push('/users');
+        // Clean up any remaining temporary URLs
+        updatedTaskData.customFields.forEach(field => {
+          if (field.fileUrl && field.fileUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(field.fileUrl);
+          }
+        });
+        
+        setTempFiles({});
+        setFilesToDelete([]);
+        setHasUnsavedChanges(false);
       }
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'An error occurred while submitting the task');
     } finally {
       setLoading(false);
     }
   };
 
-  // Cleanup function for unsaved files on reload
-  const cleanupUnsavedFiles = async () => {
-    try {
-      const currentFiles = taskData.customFields.filter(field => field.fileUrl);
-      
-      for (const field of currentFiles) {
-        // Check if this is not the original file
-        const isOriginalFile = Boolean(
-          initialData?.customFields?.find(
-            initField => initField.value === field.fileUrl
-          )
-        );
-
-        if (!isOriginalFile && field.fileUrl) {
-          try {
-            const response = await fetch('/api/upload', {
-              method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                fileUrl: field.fileUrl
-              })
-            });
-
-            if (!response.ok) {
-              console.error('Failed to delete file:', field.fileUrl);
-            }
-          } catch (error) {
-            console.error('Error deleting file:', error);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error in cleanup:', error);
-    }
-  };
-
-  // Add useEffect for handling page unload
+  // Handle before unload to warn about unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (hasUnsavedChanges) {
         e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        cleanupUnsavedFiles();
+        e.returnValue = '';
+        return '';
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('popstate', handleBeforeUnload);
-
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handleBeforeUnload);
+      
+      // Clean up any temporary object URLs when component unmounts
+      taskData.customFields.forEach(field => {
+        if (field.fileUrl && !field.fileUrl.startsWith('/uploads/')) {
+          URL.revokeObjectURL(field.fileUrl);
+        }
+      });
     };
-  }, [hasUnsavedChanges, taskData, initialData]);
-
-  const handleCancel = () => {
-    if (hasUnsavedChanges) {
-      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?');
-      if (confirmed) {
-        cleanupUnsavedFiles();
-        router.push('/users');
-      }
-    } else {
-      router.push('/users');
-    }
-  };
+  }, [hasUnsavedChanges, taskData.customFields]);
 
   const phoneInputStyles = `
     .PhoneInput {
@@ -303,93 +349,119 @@ export default function TaskForm({ initialData, onSubmit }) {
     <form onSubmit={handleSubmit} className="space-y-8">
       <style>{phoneInputStyles}</style>
 
-      {/* Custom Fields Section */}
-      <div className="space-y-4 mt-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Custom Fields</h3>
-          
-        </div>
-        
-        {taskData.customFields.map((field, index) => (
-          <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="flex-1">
-              <div
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white mb-2"
-              >{field.label}</div>
-              <div className="flex gap-4">
-                
-
-                {field.type === 'number' ? (
-                  <div className="flex-1">
-                    <PhoneInput
-                      international
-                      countryCallingCodeEditable={false}
-                      defaultCountry="US"
-                      value={field.value}
-                      onChange={(value) => handlePhoneNumberChange(value, index)}
-                      className="phone-input-container"
-                    />
-                  </div>
-                ) : field.type === 'file' ? (
-                  <div className="flex-1">
-                    <input
-                      type="file"
-                      ref={el => fileInputRefs.current[index] = el}
-                      onChange={(e) => handleFileUpload(index, e.target.files[0])}
-                      className="hidden"
-                    />
-                    <div className="flex gap-2 items-center">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRefs.current[index]?.click()}
-                        className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                      >
-                        Choose File
-                      </button>
-                      {field.fileUrl && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {field.fileName}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handlePreview(field.fileUrl)}
-                            className="px-3 py-1 text-sm bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                          >
-                            Preview
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleFileDelete(index)}
-                            className="px-3 py-1 text-sm bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : field.type === 'date' ? (
-                  <input
-                    type="datetime-local"
-                    value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => handleCustomFieldDateChange(index, e.target.value)}
-                    className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                ) : (
-                  <input
-                    type={field.type === 'number' ? 'number' : 'text'}
-                    value={field.value || ''}
-                    onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
-                    className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                )}
-              </div>
-              
-            </div>
-            
+      {/* Task Information Section */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Task Information</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Title
+            </label>
+            <input
+              type="text"
+              value={taskData.title}
+              disabled
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+            />
           </div>
-        ))}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Description
+            </label>
+            <textarea
+              value={taskData.description}
+              disabled
+              rows={3}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Custom Fields Section */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Required Information</h2>
+        <div className="space-y-4">
+          {taskData.customFields.map((field, index) => (
+            <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex-1">
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                  </label>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    {field.type === 'file' ? (
+                      <div>
+                        <input
+                          type="file"
+                          ref={el => fileInputRefs.current[index] = el}
+                          onChange={(e) => handleFileSelection(index, e.target.files[0])}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRefs.current[index]?.click()}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        >
+                          Choose File
+                        </button>
+                        {field.fileUrl && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              {field.fileName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handlePreview(field.fileUrl)}
+                              className="px-3 py-1 text-sm bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleFileDelete(index)}
+                              className="px-3 py-1 text-sm bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : field.type === 'number' ? (
+                      <div className="flex-1">
+                        <PhoneInput
+                          international
+                          countryCallingCodeEditable={false}
+                          defaultCountry="US"
+                          value={field.value}
+                          onChange={(value) => handlePhoneNumberChange(value, index)}
+                          className="phone-input-container"
+                        />
+                      </div>
+                    ) : field.type === 'date' ? (
+                      <input
+                        type="datetime-local"
+                        value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => handleCustomFieldDateChange(index, e.target.value)}
+                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    ) : (
+                      <input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        value={field.value || ''}
+                        onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
+                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Submit Buttons */}
@@ -410,7 +482,7 @@ export default function TaskForm({ initialData, onSubmit }) {
             hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
             ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {loading ? 'Saving...' : (initialData ? 'Update Task' : 'Create Task')}
+          {loading ? 'Saving...' : 'Complete Task'}
         </button>
       </div>
 
@@ -436,11 +508,33 @@ export default function TaskForm({ initialData, onSubmit }) {
               </button>
             </div>
             <div className="relative w-full h-[70vh]">
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0 rounded-lg"
-                title="File Preview"
-              />
+              {previewUrl.type === 'image' ? (
+                <img 
+                  src={previewUrl.url} 
+                  alt="File Preview" 
+                  className="w-full h-full object-contain"
+                />
+              ) : previewUrl.type === 'pdf' ? (
+                <iframe
+                  src={previewUrl.url}
+                  className="w-full h-full border-0 rounded-lg"
+                  title="PDF Preview"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <p className="text-lg text-gray-600 dark:text-gray-400 mb-4">
+                    Preview not available for this file type
+                  </p>
+                  <a 
+                    href={previewUrl.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Download File
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>
