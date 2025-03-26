@@ -1,59 +1,79 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { getUsers } from '@/app/actions/userActions';
 import DeleteUserButton from './components/DeleteUserButton';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
+  // Add debounce effect for search term
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 300ms delay
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  // Fetch users whenever filters change
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [debouncedSearchTerm, roleFilter]);
 
-  useEffect(() => {
-    filterUsers();
-  }, [searchTerm, roleFilter, users]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
-      const response = await fetch('/api/users');
+      setLoading(true);
+      
+      // Build query params for API filtering
+      const params = new URLSearchParams();
+      if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
+      if (roleFilter !== 'all') params.append('role', roleFilter);
+      
+      const response = await fetch(`/api/users?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
       const data = await response.json();
       setUsers(data);
-      setFilteredUsers(data);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearchTerm, roleFilter]);
 
-  const filterUsers = () => {
-    let filtered = [...users];
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user =>
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.mobileNo.includes(searchTerm)
-      );
-    }
-
-    // Apply role filter
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(user => user.role === roleFilter);
-    }
-
-    setFilteredUsers(filtered);
+  const handleUserDeleted = () => {
+    setSuccess('User has been deleted');
+    fetchUsers();
   };
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
+      {success && (
+        <AlertMessage 
+          message={success} 
+          type="success" 
+          onClose={() => setSuccess("")} 
+        />
+      )}
+      
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Users Management</h1>
         <Link 
@@ -80,7 +100,7 @@ export default function Users() {
                      focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-        <div className="w-48">
+        <div className="w-full md:w-48">
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -97,7 +117,7 @@ export default function Users() {
 
       {loading ? (
         <div className="text-center py-8">Loading...</div>
-      ) : filteredUsers.length === 0 ? (
+      ) : users.length === 0 ? (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           No users found matching your criteria.
         </div>
@@ -112,8 +132,8 @@ export default function Users() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredUsers.map((user) => (
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+              {users.map((user) => (
                 <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -126,7 +146,7 @@ export default function Users() {
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">{user.username}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.mobileNo}</div>
                       </div>
                     </div>
                   </td>
@@ -142,7 +162,7 @@ export default function Users() {
                       {user.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex space-x-3">
                       <Link
                         href={`/admin/users/edit/${user._id}`}
@@ -150,7 +170,10 @@ export default function Users() {
                       >
                         Edit
                       </Link>
-                      <DeleteUserButton userId={user._id} />
+                      <DeleteUserButton 
+                        userId={user._id} 
+                        onSuccess={handleUserDeleted} 
+                      />
                     </div>
                   </td>
                 </tr>

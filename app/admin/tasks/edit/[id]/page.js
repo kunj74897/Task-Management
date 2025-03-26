@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 import TaskForm from '../../components/TaskForm';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function EditTask({ params }) {
   const router = useRouter();
   const [task, setTask] = useState(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const taskId = use(params).id;
 
@@ -98,8 +100,14 @@ export default function EditTask({ params }) {
         throw new Error(data.error || 'Failed to update task');
       }
 
-      router.push('/admin/tasks');
-      router.refresh();
+      setSuccess('Task updated successfully!');
+      
+      // Navigate after a short delay to allow user to see success message
+      setTimeout(() => {
+        router.push('/admin/tasks');
+        router.refresh();
+      }, 2000);
+      
       return true;
     } catch (error) {
       setError(error.message);
@@ -115,16 +123,24 @@ export default function EditTask({ params }) {
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900 p-4 rounded-lg">
-        <p className="text-red-600 dark:text-red-200">{error}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
+      {success && (
+        <AlertMessage 
+          message={success} 
+          type="success" 
+          onClose={() => setSuccess("")} 
+        />
+      )}
+      
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Edit Task</h1>
       {task && (
         <TaskForm

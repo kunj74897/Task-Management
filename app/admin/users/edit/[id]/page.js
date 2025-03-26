@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { use } from 'react';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function EditUser({ params }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [tasks, setTasks] = useState([]);
   const [formData, setFormData] = useState({
     username: '',
@@ -54,6 +57,8 @@ export default function EditUser({ params }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
+    
     try {
       const response = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
@@ -68,8 +73,14 @@ export default function EditUser({ params }) {
         throw new Error(data.error || 'Failed to update user');
       }
 
-      router.push('/admin/users');
-      router.refresh();
+      setSuccess('User updated successfully!');
+      
+      // Navigate after a short delay to allow user to see success message
+      setTimeout(() => {
+        router.push('/admin/users');
+        router.refresh();
+      }, 2000);
+      
     } catch (error) {
       setError(error.message);
     } finally {
@@ -109,6 +120,22 @@ export default function EditUser({ params }) {
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
+      {success && (
+        <AlertMessage 
+          message={success} 
+          type="success" 
+          onClose={() => setSuccess("")} 
+        />
+      )}
+      
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Edit User</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
@@ -116,17 +143,11 @@ export default function EditUser({ params }) {
         </p>
       </div>
 
-      {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-          <p className="font-bold">Error</p>
-          <p>{error}</p>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">User Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Username
@@ -208,7 +229,7 @@ export default function EditUser({ params }) {
           </div>
         </div>
 
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 mt-6">
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Assigned Tasks</h2>
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {tasks.map(task => (
@@ -242,6 +263,11 @@ export default function EditUser({ params }) {
                 </div>
               </div>
             ))}
+            {tasks.length === 0 && (
+              <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                No tasks available
+              </div>
+            )}
           </div>
         </div>
 

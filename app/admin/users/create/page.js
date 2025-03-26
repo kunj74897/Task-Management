@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AlertMessage from "@/app/components/AlertMessage";
 
 export default function CreateUser() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -15,21 +17,10 @@ export default function CreateUser() {
     status: "active"
   });
 
-  // Auto-dismiss error after 5 seconds
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const response = await fetch("/api/users", {
@@ -46,11 +37,16 @@ export default function CreateUser() {
         throw new Error(data.error || 'Failed to create user');
       }
 
-      router.push("/admin/users");
-      router.refresh();
+      setSuccess("User created successfully!");
+      
+      // Navigate after a short delay to allow user to see success message
+      setTimeout(() => {
+        router.push("/admin/users");
+        router.refresh();
+      }, 2000);
+      
     } catch (error) {
       setError(error.message);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
@@ -67,9 +63,19 @@ export default function CreateUser() {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
       {error && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg">
-          <span className="block sm:inline">{error}</span>
-        </div>
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
+      {success && (
+        <AlertMessage 
+          message={success} 
+          type="success" 
+          onClose={() => setSuccess("")} 
+        />
       )}
       
       <div className="mb-6">
@@ -82,7 +88,8 @@ export default function CreateUser() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">User Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Username

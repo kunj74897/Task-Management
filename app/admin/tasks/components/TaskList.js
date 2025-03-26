@@ -2,28 +2,70 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { deleteTask } from '@/app/actions/taskActions';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function TaskList() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Input states that change immediately on user input
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
+  
+  // Debounced states that will trigger API calls
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [debouncedStatusFilter, setDebouncedStatusFilter] = useState('all');
+  const [debouncedPriorityFilter, setDebouncedPriorityFilter] = useState('all');
+  const [debouncedRoleFilter, setDebouncedRoleFilter] = useState('all');
 
+  // Debounce for search term
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  // Debounce for status filter
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedStatusFilter(statusFilter);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [statusFilter]);
+
+  // Debounce for priority filter
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedPriorityFilter(priorityFilter);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [priorityFilter]);
+
+  // Debounce for role filter
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedRoleFilter(roleFilter);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [roleFilter]);
+
+  // Fetch tasks when any debounced filter changes
   useEffect(() => {
     fetchTasks();
-  }, [statusFilter, priorityFilter, roleFilter]);
+  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedPriorityFilter, debouncedRoleFilter]);
 
   const fetchTasks = async () => {
     try {
+      setLoading(true);
       const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (priorityFilter !== 'all') params.append('priority', priorityFilter);
-      if (roleFilter !== 'all') params.append('role', roleFilter);
-      if (searchTerm) params.append('search', searchTerm);
+      if (debouncedStatusFilter !== 'all') params.append('status', debouncedStatusFilter);
+      if (debouncedPriorityFilter !== 'all') params.append('priority', debouncedPriorityFilter);
+      if (debouncedRoleFilter !== 'all') params.append('role', debouncedRoleFilter);
+      if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
 
       const response = await fetch(`/api/tasks?${params.toString()}`);
       const data = await response.json();
@@ -34,14 +76,6 @@ export default function TaskList() {
       setLoading(false);
     }
   };
-
-  // Add search handler with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchTasks();
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {
@@ -108,10 +142,10 @@ export default function TaskList() {
 
   const getPriorityBadgeStyle = (priority) => {
     const styles = {
-      'low': 'bg-gray-100 text-gray-800',
-      'medium': 'bg-blue-100 text-blue-800',
+      'urgent': 'bg-red-100 text-red-800',
       'high': 'bg-orange-100 text-orange-800',
-      'urgent': 'bg-red-100 text-red-800'
+      'medium': 'bg-yellow-100 text-yellow-800',
+      'low': 'bg-green-100 text-green-800'
     };
     return styles[priority] || styles.medium;
   };
@@ -153,7 +187,15 @@ export default function TaskList() {
   if (error) return <div className="text-red-500 text-center py-4">{error}</div>;
 
   return (
-    <div>
+    <div className="space-y-6">
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
       {/* Search and Filter Controls */}
       <div className="mb-6 space-y-4">
         <div className="flex flex-col md:flex-row gap-4">

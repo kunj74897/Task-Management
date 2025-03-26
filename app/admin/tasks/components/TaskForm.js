@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function TaskForm({ initialData, onSubmit }) {
   const router = useRouter();
@@ -425,6 +426,14 @@ export default function TaskForm({ initialData, onSubmit }) {
     <form onSubmit={handleSubmit} className="space-y-8">
       <style>{phoneInputStyles}</style>
       
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Basic Information</h2>
@@ -775,13 +784,6 @@ export default function TaskForm({ initialData, onSubmit }) {
           {loading ? 'Saving...' : (initialData ? 'Update Task' : 'Create Task')}
         </button>
       </div>
-
-      {error && (
-        <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
-          <p className="font-medium">Error</p>
-          <p>{error}</p>
-        </div>
-      )}
 
       {previewUrl && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
