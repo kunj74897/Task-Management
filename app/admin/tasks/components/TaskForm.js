@@ -294,7 +294,8 @@ export default function TaskForm({ initialData, onSubmit }) {
           type: field.type,
           value: field.value || '',
           required: field.required
-        }))
+        })),
+        isAdminRequest: true // Add this flag to indicate it's coming from admin
       };
 
       const success = await onSubmit(submissionData);
@@ -746,7 +747,9 @@ export default function TaskForm({ initialData, onSubmit }) {
                     onChange={(e) => handleCustomFieldChange(index, 'required', e.target.checked)}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Required field</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Required field <span className="text-xs italic">(only enforced for users, not in admin)</span>
+                  </span>
                 </label>
               </div>
             </div>

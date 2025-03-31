@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import AlertMessage from '@/app/components/AlertMessage';
 
 export default function TaskForm({ initialData, onSubmit }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
   const [taskData, setTaskData] = useState({
     title: initialData?.title || '',
@@ -185,6 +187,15 @@ export default function TaskForm({ initialData, onSubmit }) {
     setLoading(true);
     setError('');
     
+    // Add validation for required fields
+    for (const field of taskData.customFields) {
+      if (field.required && (!field.value || field.value === '')) {
+        setError(`${field.label} is required`);
+        setLoading(false);
+        return;
+      }
+    }
+    
     try {
       // Upload any temporary files first
       const updatedTaskData = { ...taskData };
@@ -259,10 +270,13 @@ export default function TaskForm({ initialData, onSubmit }) {
         }))
       };
 
-      const success = await onSubmit(submissionData);
+      const result = await onSubmit(submissionData);
       
-      if (success) {
-        // Clean up any remaining temporary URLs
+      if (result) {
+        // Success! Show success message
+        setSuccess('Task completed successfully!');
+        
+        // Clean up any temporary object URLs
         updatedTaskData.customFields.forEach(field => {
           if (field.fileUrl && field.fileUrl.startsWith('blob:')) {
             URL.revokeObjectURL(field.fileUrl);
@@ -274,6 +288,7 @@ export default function TaskForm({ initialData, onSubmit }) {
         setHasUnsavedChanges(false);
       }
     } catch (error) {
+      console.error('Error submitting task:', error);
       setError(error.message || 'An error occurred while submitting the task');
     } finally {
       setLoading(false);
@@ -348,6 +363,24 @@ export default function TaskForm({ initialData, onSubmit }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <style>{phoneInputStyles}</style>
+
+      {/* Display error message using AlertMessage component */}
+      {error && (
+        <AlertMessage 
+          message={error} 
+          type="error" 
+          onClose={() => setError("")} 
+        />
+      )}
+      
+      {/* Display success message using AlertMessage component */}
+      {success && (
+        <AlertMessage 
+          message={success} 
+          type="success" 
+          onClose={() => setSuccess("")} 
+        />
+      )}
 
       {/* Task Information Section */}
       <div>
@@ -485,13 +518,6 @@ export default function TaskForm({ initialData, onSubmit }) {
           {loading ? 'Saving...' : 'Complete Task'}
         </button>
       </div>
-
-      {error && (
-        <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
-          <p className="font-medium">Error</p>
-          <p>{error}</p>
-        </div>
-      )}
 
       {previewUrl && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

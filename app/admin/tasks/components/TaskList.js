@@ -1,98 +1,87 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import AlertMessage from '@/app/components/AlertMessage';
+import TaskFilters from './TaskFilters';
 
 export default function TaskList() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState({
+    searchTerm: '',
+    statusFilter: 'all',
+    priorityFilter: 'all',
+    roleFilter: 'all'
+  });
   
-  // Input states that change immediately on user input
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
+  // Keep track if the component is mounted to prevent state updates after unmounting
+  const isMounted = useRef(true);
   
-  // Debounced states that will trigger API calls
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [debouncedStatusFilter, setDebouncedStatusFilter] = useState('all');
-  const [debouncedPriorityFilter, setDebouncedPriorityFilter] = useState('all');
-  const [debouncedRoleFilter, setDebouncedRoleFilter] = useState('all');
-
-  // Debounce for search term
+  // Clean up on unmount
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-  // Debounce for status filter
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedStatusFilter(statusFilter);
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [statusFilter]);
-
-  // Debounce for priority filter
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedPriorityFilter(priorityFilter);
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [priorityFilter]);
-
-  // Debounce for role filter
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedRoleFilter(roleFilter);
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [roleFilter]);
-
-  // Fetch tasks when any debounced filter changes
-  useEffect(() => {
-    fetchTasks();
-  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedPriorityFilter, debouncedRoleFilter]);
-
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (debouncedStatusFilter !== 'all') params.append('status', debouncedStatusFilter);
-      if (debouncedPriorityFilter !== 'all') params.append('priority', debouncedPriorityFilter);
-      if (debouncedRoleFilter !== 'all') params.append('role', debouncedRoleFilter);
-      if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
+      if (filters.statusFilter !== 'all') params.append('status', filters.statusFilter);
+      if (filters.priorityFilter !== 'all') params.append('priority', filters.priorityFilter);
+      if (filters.roleFilter !== 'all') params.append('role', filters.roleFilter);
+      if (filters.searchTerm) params.append('search', filters.searchTerm);
 
       const response = await fetch(`/api/tasks?${params.toString()}`);
       const data = await response.json();
-      setTasks(data);
+      
+      if (isMounted.current) {
+        setTasks(data);
+        setLoading(false);
+      }
     } catch (error) {
-      setError('Error fetching tasks');
-    } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setError('Error fetching tasks');
+        setLoading(false);
+      }
     }
-  };
+  }, [filters]);
+
+  // Fetch tasks when filters change
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  // This stable callback prevents re-renders of TaskFilters component
+  const handleFiltersChange = useCallback((newFilters) => {
+    // Don't update if the filters are the same to prevent infinite loops
+    setFilters(prevFilters => {
+      if (
+        prevFilters.searchTerm === newFilters.searchTerm &&
+        prevFilters.statusFilter === newFilters.statusFilter &&
+        prevFilters.priorityFilter === newFilters.priorityFilter &&
+        prevFilters.roleFilter === newFilters.roleFilter
+      ) {
+        return prevFilters; // No change
+      }
+      return newFilters; // Update with new filters
+    });
+  }, []);
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {
-      console.log('Updating status:', { taskId, newStatus });
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
 
-      const data = await response.json();
-      console.log('Update response:', data);
-
       if (!response.ok) throw new Error('Failed to update status');
       fetchTasks();
     } catch (error) {
-      console.error('Status update error:', error);
       setError('Error updating task status');
     }
   };
@@ -183,7 +172,7 @@ export default function TaskList() {
     return styles[status] || styles.pending;
   };
 
-  if (loading) return <div className="text-center py-4">Loading tasks...</div>;
+  if (loading && tasks.length === 0) return <div className="text-center py-4">Loading tasks...</div>;
   if (error) return <div className="text-red-500 text-center py-4">{error}</div>;
 
   return (
@@ -196,54 +185,16 @@ export default function TaskList() {
         />
       )}
       
-      {/* Search and Filter Controls */}
-      <div className="mb-6 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <input
-            type="text"
-            placeholder="Search tasks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
-                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full md:w-48 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
-                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="in-progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="w-full md:w-48 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
-                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="all">All Priorities</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="w-full md:w-48 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
-                     bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="all">All Roles</option>
-            <option value="salesman">Salesman</option>
-            <option value="purchaseman">Purchaseman</option>
-          </select>
-        </div>
-      </div>
+      {/* Use the separate TaskFilters component */}
+      <TaskFilters onFiltersChange={handleFiltersChange} />
 
-      {/* Existing grid layout code */}
+      {loading && (
+        <div className="text-center py-4">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+        </div>
+      )}
+
+      {/* Grid layout for tasks */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tasks.map((task) => (
           <div 
@@ -337,7 +288,7 @@ export default function TaskList() {
           </div>
         ))}
         
-        {tasks.length === 0 && (
+        {!loading && tasks.length === 0 && (
           <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
             No tasks found
           </div>

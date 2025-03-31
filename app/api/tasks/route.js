@@ -18,13 +18,19 @@ export async function POST(request) {
 
     // Validate custom fields
     if (taskData.customFields) {
+      // Check if this is a request from the user interface (not admin)
+      const isUserRequest = taskData.isUserRequest === true;
+      
       for (const field of taskData.customFields) {
-        if (field.required && !field.value) {
+        // Skip required validation for admin requests
+        if (isUserRequest && field.required && !field.value) {
           return NextResponse.json(
             { error: `${field.label} is required` },
             { status: 400 }
           );
         }
+        
+        // Keep other validations that should apply to both admin and users
         if (field.type === 'number' && field.value && isNaN(field.value)) {
           return NextResponse.json(
             { error: `${field.label} must be a valid number` },

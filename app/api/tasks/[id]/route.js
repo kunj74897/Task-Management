@@ -66,13 +66,19 @@ export async function PATCH(request, { params }) {
 
     // Validate custom fields if present
     if (updates.customFields) {
+      // Check if this is a request from the user interface (not admin)
+      const isUserRequest = updates.isUserRequest === true;
+      
       for (const field of updates.customFields) {
-        if (field.required && !field.value) {
+        // Skip required validation for admin requests
+        if (isUserRequest && field.required && !field.value) {
           return NextResponse.json(
             { error: `${field.label} is required` },
             { status: 400 }
           );
         }
+        
+        // Keep other validations that should apply to both admin and users
         if (field.type === 'number' && field.value && isNaN(field.value)) {
           return NextResponse.json(
             { error: `${field.label} must be a valid number` },
